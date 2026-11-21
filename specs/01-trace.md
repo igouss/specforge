@@ -48,7 +48,7 @@ Feature: SF-001 — a requirement heading becomes a requirement
 
 > WHEN a document holds a fenced `gherkin` block, SpecForge SHALL attach the block's feature, as a story, to the requirement named by the feature's `@<ID>` tag, with the name, tags and steps of every scenario, the block's text and the line of its opening fence.
 >
-> IF a block cannot be parsed, carries no requirement tag or more than one, holds a scenario with no steps, names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement, or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
+> IF a block cannot be parsed, carries no requirement tag or more than one, holds a scenario with no steps or a scenario with an Examples table (a Scenario Outline), names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement, or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
 
 ```gherkin
 @SF-002 @v1
@@ -129,7 +129,13 @@ Feature: SF-002 — a story attaches to the requirement its tag names
   Scenario: a scenario with no steps is a defect
     Given the document "stepless.md"
     When the documents are compiled
-    Then the defects are "stepless.md:7: the scenario \"nothing happens\" has no steps"
+    Then the defects are "stepless.md:7: the scenario \"nothing happens\" has no steps; stepless.md:7: the scenario \"nothing else happens\" has no steps"
+
+  @near-miss
+  Scenario: a scenario outline is a defect until it is specified
+    Given the document "outline.md"
+    When the documents are compiled
+    Then the defects are "outline.md:7: the scenario outline \"a transfer in <currency>\" is not supported"
 
   @near-miss
   Scenario: a blockquote under a later heading is not the statement

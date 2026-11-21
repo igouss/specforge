@@ -1,6 +1,6 @@
 # Stories: a project's specifications, run
 
-One call runs a project's stories: the consumer names its specification directory, its pending table, its committed view and a scratch directory, and supplies a cucumber world. Sample projects live in `tests/projects/`; the sample world binds the ledger steps "an account with 100 credits", "60 credits are transferred" and "the total is {int}", and nothing else. The project `ledger` holds the specification `ledger.md` (SF-921 with the scenarios "a transfer moves credits" and "a transfer during a partition is retried", the second pending), its pending table and its committed view. The fixture `ledger-outline.md` is `ledger.md` plus a Scenario Outline named "a transfer in <currency>" whose steps are the three bound ledger steps and whose one example is `credits`: its steps are bound, so it stands executable, and cucumber runs it under another name, so the filter never selects it.
+One call runs a project's stories: the consumer names its specification directory, its pending table, its committed view and a scratch directory, and supplies a cucumber world. Sample projects live in `tests/projects/`; the sample world binds the ledger steps "an account with 100 credits", "60 credits are transferred" and "the total is {int}", and nothing else. The project `ledger` holds the specification `ledger.md` (SF-921 with the scenarios "a transfer moves credits" and "a transfer during a partition is retried", the second pending), its pending table and its committed view.
 
 ### SF-006 @ v1 — a project's stories run from its specifications
 
@@ -8,7 +8,9 @@ One call runs a project's stories: the consumer names its specification director
 >
 > IF a file cannot be read, the documents are defective, the assessment is unfit, or the committed view differs from the drawn one, THEN SpecForge SHALL run no scenario and SHALL report which, naming every defect or finding.
 >
-> IF no scenario ran, a scenario that ran did not pass, or the number of scenarios that ran differs from the number of executable scenarios, THEN the verification SHALL fail, and in the last case the report SHALL end `; <n> executable scenario(s) did not run` or `; <n> scenario(s) ran that the trace does not hold`.
+> IF no scenario ran, a scenario that ran did not pass, or the number of scenarios that ran differs from the number of executable scenarios, THEN the verification SHALL fail.
+>
+> IF the scratch directory holds anything but feature files, THEN SpecForge SHALL run no scenario and SHALL report the entry, so that nothing but the features it writes can run.
 >
 > WHEN a project's view is drawn, SpecForge SHALL write the view of a fit assessment to the view path and SHALL run no scenario.
 >
@@ -90,20 +92,21 @@ Feature: SF-006 — a project's stories run from its specifications
     And no scenario ran
 
   @near-miss
-  Scenario: an executable scenario that the run skips fails the verification
-    Given the project "ledger"
-    And its specification "ledger.md" is replaced by the document "ledger-outline.md"
-    And its view is drawn
-    When its stories are verified
-    Then the outcome reads "stories: 1 of 3 ran, 1 passed, 1 pending; 1 executable scenario(s) did not run"
-    And the verification fails
-
-  @near-miss
   Scenario: a specification that cannot be read runs nothing
     Given the project "ledger"
     And its specification directory holds a link "missing.md" to a document that does not exist
     When its stories are verified
-    Then the verification fails
+    Then the outcome names "missing.md"
+    And the verification fails
+    And no scenario ran
+
+  @near-miss
+  Scenario: a scratch directory that holds anything else runs nothing
+    Given the project "ledger"
+    And its scratch directory holds the file "notes.txt"
+    When its stories are verified
+    Then the outcome names "notes.txt"
+    And the verification fails
     And no scenario ran
 
   @one

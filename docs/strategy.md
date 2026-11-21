@@ -14,7 +14,7 @@ This approves: building SpecForge as its own repository with Symphony as first c
 
 ## Diagnosis
 
-The weakest part is in the first consumer. Symphony runs Gherkin stories under a seeded simulation, but which requirement has a story, which story is bound, which is pending and which requirement the seed sweep monitors were hand-kept in five places (two constants in the story runner, an enum, a summary line, a recipe's doc string, a pending table), and nothing checked them against each other. The unresolved force is Symphony's gates slice, which must extract and run a managed project's stories and pin a verdict to a specification version: that needs the trace as data, for more than one project. The smallest move is a library that compiles the specifications into that trace, assesses it against the step bindings, and runs the stories from it.
+The weakest part is in the first consumer. Symphony runs Gherkin stories under a seeded simulation, and its runner declared its own scope by hand: two constants named the documents and the six requirements to run, beside the step definitions that already decide it. That runner checked the constants against the documents, the pending table and skipped steps; it did not check the ids its invariant enum displays against the specifications, it repeated those ids in a summary line, a replay line and a recipe's doc string, and it showed nothing about the forty-five requirements whose stories wait. The unresolved force is Symphony's gates slice, which must extract and run a managed project's stories and pin a verdict to a specification version: that needs the trace as data, for more than one project. The smallest move is a library that compiles the specifications into that trace, assesses it against the step bindings, and runs the stories from it.
 
 ## Assumed defaults
 
@@ -27,6 +27,7 @@ Each is the builder's choice, not the operator's statement, and names what would
 | D3 | One document format: a `### <ID> @ v<N> — <title>` heading, a blockquote statement, fenced `gherkin` blocks tagged `@<ID>`. It is the format of Symphony's SRS. | A second consumer writes specifications differently. |
 | D4 | A requirement with a story but no monitored invariant is shown in the view and is not a finding. | The operator rules that every bound requirement needs an invariant in the sweep. |
 | D5 | Symphony depends on SpecForge by git revision from this local repository; nothing is pushed. | The repository is published: the dependency then names its public URL. |
+| D7 | A Scenario Outline is refused as a defect: cucumber expands and renames its rows before the run is filtered, so the trace cannot say which of them ran. | A consumer writes one: then SF-002 and SF-006 specify how its rows stand and run. |
 | D6 | The design export's simulation engine, state machines, fault models, environments, execution planner and YAML ontology are not built. | A consumer exists whose stories need nodes, a network or injected faults that it cannot write on its own harness. |
 
 ## What is reused

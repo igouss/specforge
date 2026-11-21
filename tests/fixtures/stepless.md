@@ -12,4 +12,6 @@ Feature: SF-923 — a scenario does something
     Given an account with 100 credits
 
   Scenario: nothing happens
+
+  Scenario: nothing else happens
 ```

@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -69,18 +68,11 @@ impl fmt::Display for Outcome {
             Outcome::Unfit(findings) => lines(formatter, findings),
             Outcome::Stale(_) => formatter.write_str("the committed view is stale: draw it again"),
             Outcome::Drawn(path) => write!(formatter, "the view is drawn to {}", path.display()),
-            Outcome::Ran(tally) => {
-                write!(
-                    formatter,
-                    "stories: {} of {} ran, {} passed, {} pending",
-                    tally.ran, tally.scenarios, tally.passed, tally.pending
-                )?;
-                match tally.ran.cmp(&tally.executable) {
-                    Ordering::Less => write!(formatter, "; {} executable scenario(s) did not run", tally.executable - tally.ran),
-                    Ordering::Greater => write!(formatter, "; {} scenario(s) ran that the trace does not hold", tally.ran - tally.executable),
-                    Ordering::Equal => Ok(()),
-                }
-            }
+            Outcome::Ran(tally) => write!(
+                formatter,
+                "stories: {} of {} ran, {} passed, {} pending",
+                tally.ran, tally.scenarios, tally.passed, tally.pending
+            ),
         }
     }
 }
@@ -124,11 +116,19 @@ fn sources(specifications: &Path) -> Result<Vec<Source>, Outcome> {
 fn written(scratch: &Path, trace: &Trace, assessment: &Assessment) -> Result<(), Outcome> {
     fs::create_dir_all(scratch).map_err(|error: std::io::Error| unread(scratch, &error))?;
     let entries: fs::ReadDir = fs::read_dir(scratch).map_err(|error: std::io::Error| unread(scratch, &error))?;
+    let mut features: Vec<PathBuf> = Vec::new();
     for entry in entries {
         let path: PathBuf = entry.map_err(|error: std::io::Error| unread(scratch, &error))?.path();
-        if path.extension().is_some_and(|extension: &std::ffi::OsStr| extension == "feature") {
-            fs::remove_file(&path).map_err(|error: std::io::Error| unread(&path, &error))?;
+        if !(path.is_file() && path.extension().is_some_and(|extension: &std::ffi::OsStr| extension == "feature")) {
+            return Err(Outcome::Unread(format!(
+                "{}: the scratch directory holds something other than feature files",
+                path.display()
+            )));
         }
+        features.push(path);
+    }
+    for path in features {
+        fs::remove_file(&path).map_err(|error: std::io::Error| unread(&path, &error))?;
     }
     for (requirement, row) in trace.requirements.iter().zip(&assessment.rows) {
         if row.progress == Progress::NotStarted {

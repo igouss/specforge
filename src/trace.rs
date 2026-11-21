@@ -83,6 +83,11 @@ pub enum Defect {
         line: usize,
         scenario: String,
     },
+    Outline {
+        path: String,
+        line: usize,
+        scenario: String,
+    },
     Undeclared {
         path: String,
         line: usize,
@@ -119,6 +124,7 @@ impl fmt::Display for Defect {
             Defect::Untagged { path, line } => write!(formatter, "{path}:{line}: the story carries no requirement tag"),
             Defect::Overtagged { path, line } => write!(formatter, "{path}:{line}: the story carries more than one requirement tag"),
             Defect::Stepless { path, line, scenario } => write!(formatter, "{path}:{line}: the scenario \"{scenario}\" has no steps"),
+            Defect::Outline { path, line, scenario } => write!(formatter, "{path}:{line}: the scenario outline \"{scenario}\" is not supported"),
             Defect::Undeclared { path, line, id } => write!(formatter, "{path}:{line}: the story is tagged {id}, which no heading declares"),
             Defect::Misplaced { path, line, id } => write!(formatter, "{path}:{line}: the story is tagged {id} but does not sit under its heading"),
             Defect::Redeclared { path, line, id } => write!(formatter, "{path}:{line}: {id} is declared a second time"),
@@ -244,6 +250,37 @@ fn scenarios(feature: &gherkin::Feature) -> Vec<Scenario> {
     found
 }
 
+fn outline(scenario: &gherkin::Scenario) -> bool {
+    !scenario.examples.is_empty()
+}
+
+fn shape_defects(feature: &gherkin::Feature, scenarios: &[Scenario], path: &str, line: usize) -> Vec<Defect> {
+    let parsed: Vec<&gherkin::Scenario> = feature
+        .scenarios
+        .iter()
+        .chain(feature.rules.iter().flat_map(|rule: &gherkin::Rule| &rule.scenarios))
+        .collect();
+    let mut defects: Vec<Defect> = Vec::new();
+    for (scenario, source) in scenarios.iter().zip(parsed) {
+        let (path, scenario_name): (String, String) = (path.to_string(), scenario.name.clone());
+        if scenario.steps.is_empty() {
+            defects.push(Defect::Stepless {
+                path: path.clone(),
+                line,
+                scenario: scenario_name.clone(),
+            });
+        }
+        if outline(source) {
+            defects.push(Defect::Outline {
+                path,
+                line,
+                scenario: scenario_name,
+            });
+        }
+    }
+    defects
+}
+
 fn why(error: &gherkin::ParseError) -> String {
     let shown: String = error.to_string();
     shown
@@ -278,13 +315,9 @@ fn attach(block: Block, requirements: &mut [(usize, Requirement)], found: &mut V
         }
     };
     let scenarios: Vec<Scenario> = scenarios(&feature);
-    if let Some(stepless) = scenarios.iter().find(|scenario: &&Scenario| scenario.steps.is_empty()) {
-        let defect: Defect = Defect::Stepless {
-            path,
-            line,
-            scenario: stepless.name.clone(),
-        };
-        return found.push(Found { document, line, defect });
+    let shapes: Vec<Defect> = shape_defects(&feature, &scenarios, &path, line);
+    if !shapes.is_empty() {
+        return found.extend(shapes.into_iter().map(|defect: Defect| Found { document, line, defect }));
     }
     let Some(index): Option<usize> = requirements.iter().position(|(_, requirement): &(usize, Requirement)| requirement.id == id) else {
         return found.push(Found {

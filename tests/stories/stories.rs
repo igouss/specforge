@@ -95,6 +95,13 @@ fn dangling(world: &mut Forge, name: String) {
     std::os::unix::fs::symlink(specifications.join("absent-target.md"), specifications.join(name)).expect("the link is made");
 }
 
+#[given(expr = "its scratch directory holds the file {string}")]
+fn scratch_holds(world: &mut Forge, name: String) {
+    let scratch: &Path = &project(world).scratch;
+    fs::create_dir_all(scratch).expect("the scratch directory is made");
+    fs::write(scratch.join(name), "").expect("the file is written");
+}
+
 #[given(expr = "it monitors the requirements {string}")]
 fn monitors(world: &mut Forge, ids: String) {
     let monitored: Vec<String> = listed(&ids, ", ");
@@ -109,6 +116,12 @@ async fn verified(world: &mut Forge) {
 #[then(expr = "the outcome reads {string}")]
 fn reads(world: &mut Forge, expected: String) {
     assert_eq!(outcome(world).to_string(), unescaped(&expected));
+}
+
+#[then(expr = "the outcome names {string}")]
+fn names(world: &mut Forge, expected: String) {
+    let shown: String = outcome(world).to_string();
+    assert!(shown.contains(&unescaped(&expected)), "{shown}");
 }
 
 #[then("the verification passes")]
