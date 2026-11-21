@@ -4,7 +4,7 @@ A specification document is Markdown. A requirement is a level-three heading wit
 
 ### SF-001 @ v1 — a requirement heading becomes a requirement
 
-> WHEN documents are compiled, SpecForge SHALL yield one requirement for each heading of the form `### <ID> @ v<N> — <title>`, in document order and then heading order, carrying its id, its version, its title, the first blockquote below the heading as its statement on one line, and the path and line of the heading.
+> WHEN documents are compiled, SpecForge SHALL yield one requirement for each heading of the form `### <ID> @ v<N> — <title>`, in document order and then heading order, carrying its id, its version, its title, the first blockquote between the heading and the next heading as its statement on one line, and the path and line of the heading.
 >
 > A level-three heading of any other form SHALL be read as prose.
 
@@ -48,7 +48,7 @@ Feature: SF-001 — a requirement heading becomes a requirement
 
 > WHEN a document holds a fenced `gherkin` block, SpecForge SHALL attach the block's feature, as a story, to the requirement named by the feature's `@<ID>` tag, with the name, tags and steps of every scenario, the block's text and the line of its opening fence.
 >
-> IF a block cannot be parsed, carries no requirement tag, names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement, or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
+> IF a block cannot be parsed, carries no requirement tag or more than one, holds a scenario with no steps, names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement, or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
 
 ```gherkin
 @SF-002 @v1
@@ -118,6 +118,24 @@ Feature: SF-002 — a story attaches to the requirement its tag names
     Given the document "unstated.md"
     When the documents are compiled
     Then the defects are "unstated.md:3: SF-915 states nothing"
+
+  @near-miss
+  Scenario: a story with two requirement tags is a defect
+    Given the document "overtagged.md"
+    When the documents are compiled
+    Then the defects are "overtagged.md:7: the story carries more than one requirement tag"
+
+  @near-miss
+  Scenario: a scenario with no steps is a defect
+    Given the document "stepless.md"
+    When the documents are compiled
+    Then the defects are "stepless.md:7: the scenario \"nothing happens\" has no steps"
+
+  @near-miss
+  Scenario: a blockquote under a later heading is not the statement
+    Given the document "statement-elsewhere.md"
+    When the documents are compiled
+    Then the defects are "statement-elsewhere.md:3: SF-918 states nothing"
 
   @many @near-miss
   Scenario: every defect is reported, not only the first

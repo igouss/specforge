@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,6 +28,7 @@ pub enum Mode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Tally {
     pub scenarios: usize,
+    pub executable: usize,
     pub ran: usize,
     pub passed: usize,
     pub pending: usize,
@@ -43,11 +45,11 @@ pub enum Outcome {
 }
 
 impl Outcome {
-    /// While the outcome is a drawn view, or a run in which at least one scenario ran and every scenario that ran passed, `passed` shall return true.
+    /// While the outcome is a drawn view, or a run in which at least one scenario ran, every executable scenario ran and every scenario that ran passed, `passed` shall return true.
     pub fn passed(&self) -> bool {
         match self {
             Outcome::Drawn(_) => true,
-            Outcome::Ran(tally) => tally.ran > 0 && tally.passed == tally.ran,
+            Outcome::Ran(tally) => tally.ran > 0 && tally.ran == tally.executable && tally.passed == tally.ran,
             Outcome::Unread(_) | Outcome::Defective(_) | Outcome::Unfit(_) | Outcome::Stale(_) => false,
         }
     }
@@ -67,11 +69,18 @@ impl fmt::Display for Outcome {
             Outcome::Unfit(findings) => lines(formatter, findings),
             Outcome::Stale(_) => formatter.write_str("the committed view is stale: draw it again"),
             Outcome::Drawn(path) => write!(formatter, "the view is drawn to {}", path.display()),
-            Outcome::Ran(tally) => write!(
-                formatter,
-                "stories: {} of {} ran, {} passed, {} pending",
-                tally.ran, tally.scenarios, tally.passed, tally.pending
-            ),
+            Outcome::Ran(tally) => {
+                write!(
+                    formatter,
+                    "stories: {} of {} ran, {} passed, {} pending",
+                    tally.ran, tally.scenarios, tally.passed, tally.pending
+                )?;
+                match tally.ran.cmp(&tally.executable) {
+                    Ordering::Less => write!(formatter, "; {} executable scenario(s) did not run", tally.executable - tally.ran),
+                    Ordering::Greater => write!(formatter, "; {} scenario(s) ran that the trace does not hold", tally.ran - tally.executable),
+                    Ordering::Equal => Ok(()),
+                }
+            }
         }
     }
 }
@@ -95,7 +104,7 @@ fn sources(specifications: &Path) -> Result<Vec<Source>, Outcome> {
     let mut paths: Vec<PathBuf> = Vec::new();
     for entry in entries {
         let path: PathBuf = entry.map_err(|error: std::io::Error| unread(specifications, &error))?.path();
-        if path.is_file() && path.extension().is_some_and(|extension: &std::ffi::OsStr| extension == "md") {
+        if path.extension().is_some_and(|extension: &std::ffi::OsStr| extension == "md") {
             paths.push(path);
         }
     }
@@ -209,8 +218,10 @@ pub async fn stories<W: cucumber::World + fmt::Debug + WorldInventory>(project: 
         .map(|row: &assess::Row| row.scenarios)
         .sum();
     let pending: usize = assessment.rows.iter().map(|row: &assess::Row| row.pending).sum();
+    let executable: usize = assessment.rows.iter().map(|row: &assess::Row| row.executable).sum();
     Outcome::Ran(Tally {
         scenarios,
+        executable,
         ran,
         passed,
         pending,

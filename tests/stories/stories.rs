@@ -89,6 +89,12 @@ fn view_deleted(world: &mut Forge) {
     fs::remove_file(&project(world).view).expect("the view is deleted");
 }
 
+#[given(expr = "its specification directory holds a link {string} to a document that does not exist")]
+fn dangling(world: &mut Forge, name: String) {
+    let specifications: &Path = &project(world).specifications;
+    std::os::unix::fs::symlink(specifications.join("absent-target.md"), specifications.join(name)).expect("the link is made");
+}
+
 #[given(expr = "it monitors the requirements {string}")]
 fn monitors(world: &mut Forge, ids: String) {
     let monitored: Vec<String> = listed(&ids, ", ");

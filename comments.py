@@ -3,6 +3,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
+PREFIXES = ("br", "cr", "b", "c", "r")
 IDENT = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 
 
@@ -60,15 +61,16 @@ def comments(text):
             i = block_end(text, i + 2)
         elif c == '"':
             i = string_end(text, i + 1)
-        elif c in "rb" and previous not in IDENT:
-            start = i + 1 if c == "b" and text.startswith("br", i) else i
-            raw = raw_prefix(text, start) if text[start] == "r" else None
+        elif c in "bcr" and previous not in IDENT:
+            prefix = next((p for p in PREFIXES if text.startswith(p, i)), "")
+            rest = i + len(prefix)
+            raw = raw_prefix(text, rest - 1) if prefix.endswith("r") else None
             if raw:
                 i = raw_string_end(text, raw[1], raw[0])
-            elif c == "b" and text.startswith('b"', i):
-                i = string_end(text, i + 2)
-            elif c == "b" and text.startswith("b'", i):
-                i = char_end(text, i + 1)
+            elif text.startswith('"', rest):
+                i = string_end(text, rest + 1)
+            elif prefix == "b" and text.startswith("'", rest):
+                i = char_end(text, rest)
             else:
                 i += 1
         elif c == "'":

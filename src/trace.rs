@@ -74,6 +74,15 @@ pub enum Defect {
         path: String,
         line: usize,
     },
+    Overtagged {
+        path: String,
+        line: usize,
+    },
+    Stepless {
+        path: String,
+        line: usize,
+        scenario: String,
+    },
     Undeclared {
         path: String,
         line: usize,
@@ -108,6 +117,8 @@ impl fmt::Display for Defect {
         match self {
             Defect::Unparseable { path, line, why } => write!(formatter, "{path}:{line}: the story cannot be parsed: {why}"),
             Defect::Untagged { path, line } => write!(formatter, "{path}:{line}: the story carries no requirement tag"),
+            Defect::Overtagged { path, line } => write!(formatter, "{path}:{line}: the story carries more than one requirement tag"),
+            Defect::Stepless { path, line, scenario } => write!(formatter, "{path}:{line}: the scenario \"{scenario}\" has no steps"),
             Defect::Undeclared { path, line, id } => write!(formatter, "{path}:{line}: the story is tagged {id}, which no heading declares"),
             Defect::Misplaced { path, line, id } => write!(formatter, "{path}:{line}: the story is tagged {id} but does not sit under its heading"),
             Defect::Redeclared { path, line, id } => write!(formatter, "{path}:{line}: {id} is declared a second time"),
@@ -160,11 +171,14 @@ fn quoted(raw: &str) -> String {
 
 fn read(document: usize, source: &Source, requirements: &mut Vec<(usize, Requirement)>, blocks: &mut Vec<Block>) {
     let mut under: Option<usize> = None;
+    let mut stating: bool = false;
     let mut gherkin: Option<Block> = None;
     for (event, range) in Parser::new(&source.text).into_offset_iter() {
         let raw: &str = source.text.get(range.clone()).unwrap_or("");
-        if let Event::Start(Tag::Heading { level: HeadingLevel::H3, .. }) = event {
-            if let Some((id, version, title)) = heading(raw) {
+        if let Event::Start(Tag::Heading { level, .. }) = event {
+            stating = false;
+            if let Some((id, version, title)) = heading(raw).filter(|_| level == HeadingLevel::H3) {
+                stating = true;
                 under = Some(requirements.len());
                 let line: usize = line_of(&source.text, range.start);
                 let requirement: Requirement = Requirement {
@@ -179,10 +193,9 @@ fn read(document: usize, source: &Source, requirements: &mut Vec<(usize, Require
                 requirements.push((document, requirement));
             }
         } else if let Event::Start(Tag::BlockQuote(_)) = event {
-            if let Some((_, requirement)) = under.and_then(|index: usize| requirements.get_mut(index)) {
-                if requirement.statement.is_empty() {
-                    requirement.statement = quoted(raw);
-                }
+            if let Some((_, requirement)) = under.and_then(|index: usize| requirements.get_mut(index)).filter(|_| stating) {
+                requirement.statement = quoted(raw);
+                stating = false;
             }
         } else if let Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) = event {
             if info.split_whitespace().next() == Some("gherkin") {
@@ -253,13 +266,26 @@ fn attach(block: Block, requirements: &mut [(usize, Requirement)], found: &mut V
             return found.push(Found { document, line, defect });
         }
     };
-    let Some(id): Option<RequirementId> = feature.tags.iter().find_map(|tag: &String| RequirementId::parse(tag)) else {
-        return found.push(Found {
-            document,
-            line,
-            defect: Defect::Untagged { path, line },
-        });
+    let ids: Vec<RequirementId> = feature.tags.iter().filter_map(|tag: &String| RequirementId::parse(tag)).collect();
+    let id: RequirementId = match <[RequirementId; 1]>::try_from(ids) {
+        Ok([id]) => id,
+        Err(ids) => {
+            let defect: Defect = match ids.is_empty() {
+                true => Defect::Untagged { path, line },
+                false => Defect::Overtagged { path, line },
+            };
+            return found.push(Found { document, line, defect });
+        }
     };
+    let scenarios: Vec<Scenario> = scenarios(&feature);
+    if let Some(stepless) = scenarios.iter().find(|scenario: &&Scenario| scenario.steps.is_empty()) {
+        let defect: Defect = Defect::Stepless {
+            path,
+            line,
+            scenario: stepless.name.clone(),
+        };
+        return found.push(Found { document, line, defect });
+    }
     let Some(index): Option<usize> = requirements.iter().position(|(_, requirement): &(usize, Requirement)| requirement.id == id) else {
         return found.push(Found {
             document,
@@ -278,7 +304,7 @@ fn attach(block: Block, requirements: &mut [(usize, Requirement)], found: &mut V
         name: feature.name.clone(),
         text,
         line,
-        scenarios: scenarios(&feature),
+        scenarios,
     };
     if let Some((_, requirement)) = requirements.get_mut(index) {
         requirement.stories.push(story);
