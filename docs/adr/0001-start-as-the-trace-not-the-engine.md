@@ -8,7 +8,7 @@ Recorded verbatim in [docs/strategy.md](../strategy.md).
 
 ## Weakest part at the time
 
-Nothing existed here but a design for sixteen graph entities across six contexts. The first consumer, Symphony, already ran Gherkin stories under a seeded simulation, and kept the link from requirement to story, binding, pending entry and invariant by hand in five places.
+Nothing existed here but a design for sixteen graph entities across six contexts. The first consumer, Symphony, already ran Gherkin stories under a seeded simulation, declared the scope of that run by hand beside the step definitions that decide it, never compared the ids of its invariant enum with the specifications, and had no view of the requirements not yet started.
 
 ## Forces in conflict
 
