@@ -1,6 +1,6 @@
 # SpecForge: working rules for this repository
 
-SpecForge compiles Markdown specifications (EARS statements with fenced Gherkin stories) into a requirement trace, assesses the trace against step bindings, and runs the stories. Its first consumer is Symphony (`../symphony`), whose story runner is glue over it.
+SpecForge compiles Markdown specifications (EARS statements with fenced Gherkin stories) into a requirement trace, assesses the trace against step bindings, and runs the stories. It is a public, reusable library, work in progress; its first consumer is Symphony, a private project of the operator's, whose story runner is glue over it. Agents arriving from another project read [AGENTS.md](AGENTS.md): they are welcome to change and adapt it.
 
 ## Read first
 
@@ -27,7 +27,7 @@ SpecForge compiles Markdown specifications (EARS statements with fenced Gherkin 
 
 - One requirement per `### SF-NNN @ v1 — title` heading, an EARS blockquote, one fenced `gherkin` block. The stories run through SpecForge itself (`tests/stories`), so a new story is unbound until its steps exist and the committed view says so.
 - Nothing below story level. No tests of private functions.
-- A change that Symphony consumes lands here first, then Symphony's `simulation/Cargo.toml` takes the new revision.
+- A change a consumer needs lands here first and is pushed; the consumer then takes the new revision (`cargo update -p specforge`). Nothing in `src/` may name a consumer: what one project needs is expressed as a story any project could read.
 
 ## House rules
 

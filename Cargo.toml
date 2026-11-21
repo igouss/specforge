@@ -3,7 +3,11 @@ name = "specforge"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Compiles Markdown specifications into a requirement trace and runs their Gherkin stories"
+description = "Compiles Markdown specifications (EARS with Gherkin stories) into a requirement trace, assesses it against step definitions, and runs the stories"
+repository = "https://github.com/igouss/specforge"
+readme = "README.md"
+keywords = ["gherkin", "cucumber", "requirements", "specification", "ears"]
+categories = ["development-tools::testing"]
 
 [features]
 cucumber = ["dep:cucumber"]
