@@ -1,7 +1,31 @@
 [package]
 name = "specforge"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Compiles Markdown specifications into a requirement trace and runs their Gherkin stories"
+
+[features]
+cucumber = ["dep:cucumber"]
 
 [dependencies]
+cucumber = { version = "0.23", optional = true }
+gherkin = "0.16"
+pulldown-cmark = { version = "0.13", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt"] }
+
+[[test]]
+name = "stories"
+harness = false
+required-features = ["cucumber"]
+
+[lints.rust]
+unused_must_use = "deny"
+unsafe_code = "forbid"
+
+[lints.clippy]
+wildcard_enum_match_arm = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
