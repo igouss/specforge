@@ -1,10 +1,10 @@
 # Stories: a project's specifications, run
 
-One call runs a project's stories: the consumer names its specification directory, its pending table, its committed view and a scratch directory, and supplies a cucumber world. Sample projects live in `tests/projects/`; the sample world binds the ledger steps "an account with 100 credits", "60 credits are transferred" and "the total is {int}", and nothing else. The project `ledger` holds the specification `ledger.md` (SF-921 with the scenarios "a transfer moves credits" and "a transfer during a partition is retried", the second pending), its pending table and its committed view.
+One call runs a project's stories: the consumer names its specification directory, its pending table, its committed view and a scratch directory, and supplies a cucumber world. Sample projects live in `tests/projects/`; the sample world binds the ledger steps "an account with 100 credits", "60 credits are transferred", "the total is {int}" and "the recipient holds {int}", and nothing else. The project `ledger` holds the specification `ledger.md` (SF-921 with the scenarios "a transfer moves credits" and "a transfer during a partition is retried", the second pending), its pending table and its committed view.
 
 ### SF-006 @ v1 — a project's stories run from its specifications
 
-> WHEN a project's stories are verified, SpecForge SHALL compile every `*.md` file directly in the specification directory, in file-name order, assess the trace against the world's step definitions, the pending table and the monitored ids, and run exactly the executable scenarios, from features written to the scratch directory and never beside the specifications.
+> WHEN a project's stories are verified, SpecForge SHALL compile every `*.md` file directly in the specification directory, in file-name order, assess the trace against the world's step definitions, the pending table and the monitored ids, and run exactly the executable scenarios (including scenarios inside `Rule`s with their folded `Background` steps), from features written to the scratch directory and never beside the specifications.
 >
 > IF a file cannot be read, the documents are defective, the assessment is unfit, or the committed view differs from the drawn one, THEN SpecForge SHALL run no scenario and SHALL report which, naming every defect or finding.
 >
@@ -134,4 +134,14 @@ Feature: SF-006 — a project's stories run from its specifications
     When its view is drawn
     Then its committed view does not exist
     And the verification fails
+
+  @many
+  Scenario: executable scenarios inside rules run with their folded backgrounds
+    Given the project "ledger"
+    And its specification "ledger.md" is replaced by the document "ledger-rules.md"
+    And its view is drawn
+    When its stories are verified
+    Then the outcome reads "stories: 3 of 4 ran, 3 passed, 1 pending"
+    And the verification passes
+    And no feature file lies in its specification directory
 ```

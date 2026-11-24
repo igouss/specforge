@@ -31,3 +31,8 @@ fn transferred(world: &mut Ledger) {
 fn total_is(world: &mut Ledger, total: i64) {
     assert_eq!(world.accounts.iter().sum::<i64>(), total);
 }
+
+#[then(expr = "the recipient holds {int}")]
+fn recipient_holds(world: &mut Ledger, credits: i64) {
+    assert_eq!(world.accounts.get(1).copied(), Some(credits));
+}

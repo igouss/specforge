@@ -4,7 +4,7 @@ An assessment joins a trace with three things the consumer supplies: whether eac
 
 ### SF-003 @ v1 — a scenario stands as pending, executable or unbound
 
-> WHEN a trace is assessed, each scenario SHALL stand as pending if the pending table names it, otherwise as executable if every one of its steps is bound exactly once, otherwise as unbound.
+> WHEN a trace is assessed, each scenario SHALL stand as pending if the pending table names it, otherwise as executable if every one of its steps (including folded `Background` steps) is bound exactly once, otherwise as unbound.
 >
 > A requirement SHALL be `not started` while none of its scenarios is executable, `bound` when at least one is executable and every other is executable or pending, and `partial` otherwise. A requirement that is not started SHALL raise no finding for its unbound steps.
 
@@ -59,11 +59,22 @@ Feature: SF-003 — a scenario stands as pending, executable or unbound
     Then requirement "SF-911" is "bound" with 1 of 2 scenarios executable and 1 pending
     And the scenario "a transfer during a partition is retried" of "SF-911" stands "pending"
     And there are no findings
+
+  @near-miss
+  Scenario: an unbound feature background step leaves every inheriting scenario unbound
+    Given the document "background-and-rules.md"
+    And the steps "60 credits are transferred; the total is 100; transfers carry no fee; an audit log is open" are bound
+    When the trace is assessed
+    Then requirement "SF-934" is "not started"
+    And the scenario "a top-level transfer" of "SF-934" stands "unbound"
+    And the scenario "a fee-free transfer" of "SF-934" stands "unbound"
+    And the scenario "an audited transfer" of "SF-934" stands "unbound"
+    And there are no findings
 ```
 
 ### SF-004 @ v1 — what does not add up is a finding
 
-> IF a pending entry names no scenario of the trace, or names a scenario whose every step is bound; IF a requirement is partial; IF a step of any scenario is matched by more than one binding; or IF a monitored id names no requirement of the trace, THEN the assessment SHALL carry a finding for each, and an assessment with any finding SHALL be unfit. A partial requirement SHALL raise one finding for each unbound step of each of its unbound scenarios.
+> IF a pending entry names no scenario of the trace, or names a scenario whose every step is bound; IF a requirement is partial; IF a step of any scenario is matched by more than one binding; or IF a monitored id names no requirement of the trace, THEN the assessment SHALL carry a finding for each, and an assessment with any finding SHALL be unfit. A partial requirement SHALL raise one finding for each unbound step (including any folded `Background` step) of each of its unbound scenarios.
 
 ```gherkin
 @SF-004 @v1
@@ -121,6 +132,16 @@ Feature: SF-004 — what does not add up is a finding
     And the requirements "SF-911, SF-999" are monitored
     When the trace is assessed
     Then the findings are "monitored requirement SF-999 is not in the trace"
+
+  @near-miss
+  Scenario: an unbound rule background step makes a started requirement partial
+    Given the document "background-and-rules.md"
+    And the steps "an account with 100 credits; 60 credits are transferred; the total is 100; transfers carry no fee" are bound
+    When the trace is assessed
+    Then requirement "SF-934" is "partial" with 2 of 3 scenarios executable and 0 pending
+    And the scenario "an audited transfer" of "SF-934" stands "unbound"
+    And the findings are "SF-934 \"an audited transfer\" has the unbound step \"Given an audit log is open\""
+    And the assessment is unfit
 ```
 
 ### SF-005 @ v1 — the assessment draws as one table

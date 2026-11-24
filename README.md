@@ -118,7 +118,7 @@ SpecForge supports specification-driven verification ([ADR 0002](docs/adr/0002-s
 
 ## Limits today
 
-- One document format (`specs/*.md`, with `gherkin` and `specforge` fenced blocks). Scenario Outlines are refused as a defect; Background and Rule steps are folded into each scenario but not specified (`sf-zg9`).
+- One document format (`specs/*.md`, with `gherkin` and `specforge` fenced blocks). `Background` and `Rule` are specified and supported; only `Scenario Outline` (scenarios with an `Examples` table) is refused as a defect.
 - Only `*.md` files directly in the specification directory are read (directories named `*.md` are skipped).
 - Concrete external tool bridges (e.g., TLA+/TLC, Kani, Turmoil) and optional qualified statistical models remain future work. See [docs/strategy.md](docs/strategy.md) and `.beads/` (`br ready`).
 

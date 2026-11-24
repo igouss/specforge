@@ -62,9 +62,9 @@ Feature: SF-001 — a requirement heading becomes a requirement
 
 ### SF-002 @ v1 — a story attaches to the requirement its tag names
 
-> WHEN a document holds a fenced `gherkin` block, SpecForge SHALL attach the block's feature, as a story, to the requirement named by the feature's `@<ID>` tag, with the name, tags and steps of every scenario, the block's text and the line of its opening fence.
+> WHEN a document holds a fenced `gherkin` block, SpecForge SHALL attach the block's feature, as a story, to the requirement named by the feature's `@<ID>` tag, with the name, tags and steps of every top-level scenario and every scenario inside each `Rule` in document order, the block's text and the line of its opening fence. Feature `Background` steps SHALL prepend to every scenario in the feature; a `Rule` `Background`'s steps SHALL prepend after the feature `Background` to every scenario inside that `Rule` only.
 >
-> IF a block cannot be parsed, carries no requirement tag or more than one, holds a scenario with no steps or a scenario with an Examples table (a Scenario Outline), names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement, or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
+> IF a block cannot be parsed, carries no requirement tag or more than one, holds a scenario (top-level or inside a `Rule`) with no folded steps or with an Examples table (a Scenario Outline), names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement (including across `Rule`s), or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
 
 ```gherkin
 @SF-002 @v1
@@ -173,4 +173,36 @@ Feature: SF-002 — a story attaches to the requirement its tag names
     When the documents are compiled
     Then there is no trace
     And the defects are "untagged.md:7: the story carries no requirement tag; unstated.md:3: SF-915 states nothing"
+
+  @many
+  Scenario: feature and rule backgrounds fold in order without leaking across rules
+    Given the document "background-and-rules.md"
+    When the documents are compiled
+    Then requirement "SF-934" has the scenarios "a top-level transfer; a fee-free transfer; an audited transfer"
+    And the scenario "a top-level transfer" of "SF-934" has the steps "Given an account with 100 credits; When 60 credits are transferred; Then the total is 100"
+    And the scenario "a fee-free transfer" of "SF-934" has the steps "Given an account with 100 credits; Given transfers carry no fee; When 60 credits are transferred; Then the total is 100"
+    And the scenario "a fee-free transfer" of "SF-934" has the tags "rule-one"
+    And the scenario "an audited transfer" of "SF-934" has the steps "Given an account with 100 credits; Given an audit log is open; Then the total is 100"
+    And there are no defects
+
+  @near-miss
+  Scenario: a repeated scenario name across rules is a defect
+    Given the document "rule-repeated.md"
+    When the documents are compiled
+    Then there is no trace
+    And the defects are "rule-repeated.md:3: SF-935 repeats the scenario \"a transfer\""
+
+  @near-miss
+  Scenario: a scenario outline inside a rule is a defect
+    Given the document "rule-outline.md"
+    When the documents are compiled
+    Then there is no trace
+    And the defects are "rule-outline.md:7: the scenario outline \"a transfer in <currency>\" is not supported"
+
+  @near-miss
+  Scenario: a scenario with no steps inside a rule is a defect
+    Given the document "rule-stepless.md"
+    When the documents are compiled
+    Then there is no trace
+    And the defects are "rule-stepless.md:7: the scenario \"nothing happens in this rule\" has no steps"
 ```
