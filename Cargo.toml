@@ -11,11 +11,20 @@ categories = ["development-tools::testing"]
 
 [features]
 cucumber = ["dep:cucumber"]
+ledger-fs = []
+proptest-adapter = ["dep:proptest"]
+verification = ["ledger-fs", "proptest-adapter"]
 
 [dependencies]
 cucumber = { version = "0.23", optional = true }
 gherkin = "0.16"
+hex = "0.4"
+proptest = { version = "1", optional = true }
 pulldown-cmark = { version = "0.13", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_norway = "0.9"
+sha2 = "0.10"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt"] }
@@ -23,7 +32,7 @@ tokio = { version = "1", features = ["rt"] }
 [[test]]
 name = "stories"
 harness = false
-required-features = ["cucumber"]
+required-features = ["cucumber", "verification"]
 
 [lints.rust]
 unused_must_use = "deny"

@@ -106,11 +106,20 @@ SpecForge's own stories run this way: [tests/stories/main.rs](tests/stories/main
 
 A requirement none of whose scenarios is executable is `not started`: it raises nothing and waits in the view. `monitored` is for projects that also check requirements as invariants elsewhere (a property test, a simulation sweep): pass the ids that checker claims and SpecForge verifies each exists.
 
+## Verification extension
+
+SpecForge also supports specification-driven verification ([ADR 0002](docs/adr/0002-specification-driven-verification.md), `SF-007`–`SF-011`):
+
+- **Hashed graph snapshots** (`graph::compile_graph`): parses fenced `specforge` YAML blocks (`assumption`, `state_machine`, `property`, `claim`, `plan`) alongside EARS+Gherkin requirements and assigns deterministic SHA-256 digests per document, artifact, and snapshot.
+- **Append-only Evidence Ledger** (`ledger::EvidenceLedger`, plus `ledger_fs::FsLedger` behind `feature = "ledger-fs"`): immutable provenance records with self-verifying SHA-256 digests, typed links (`supports`, `contradicts`, `corroborates`, `derived_from`, `supersedes`, `invalidates`), canonical JSON export, and content-addressed blob storage.
+- **Claim assessment & surgical staleness** (`assurance::assess_claim`, `assurance::impact_set`): keeps `satisfied`, `violated`, `inconclusive`, formal `proved`/`bounded_success`, and claim statuses distinct; marks only evidence whose pinned dependencies changed as `stale`.
+- **Models, counterexamples & adapters** (`model`, `verify::VerificationAdapter`, `proptest_adapter` behind `feature = "proptest-adapter"`, and `stories::stories_with_evidence` behind `feature = "cucumber"`): transition-covering scenario generation, trace safety-property evaluation, shrunk counterexample lineage with deterministic replay, and separate `VerificationDecision` records. See [docs/adapters.md](docs/adapters.md) to integrate another engine.
+
 ## Limits today
 
-- One document format, the one above. Scenario Outlines are refused as a defect; Background and Rule steps are folded into each scenario but not specified.
+- One document format (`specs/*.md`, with `gherkin` and `specforge` fenced blocks). Scenario Outlines are refused as a defect; Background and Rule steps are folded into each scenario but not specified.
 - Only `*.md` files directly in the specification directory are read.
-- No command-line tool, no content hash of the trace, no evidence record yet. The open work is in `.beads/` (`br ready`) and the plan in [docs/strategy.md](docs/strategy.md).
+- No command-line tool, DST adapter, formal model-checker adapter, or probabilistic model yet. The open work is in `.beads/` (`br ready`) and the plan in [docs/strategy.md](docs/strategy.md).
 
 ## For AI agents
 

@@ -1,6 +1,7 @@
 use std::fmt;
 
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Parser, Tag, TagEnd};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Source {
@@ -8,8 +9,18 @@ pub struct Source {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct RequirementId(String);
+
+impl<'de> Deserialize<'de> for RequirementId {
+    fn deserialize<D>(deserializer: D) -> Result<RequirementId, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw: String = String::deserialize(deserializer)?;
+        RequirementId::parse(&raw).ok_or_else(|| serde::de::Error::custom(format!("invalid requirement id \"{raw}\"")))
+    }
+}
 
 impl RequirementId {
     /// When a text is one or more capital letters, a hyphen and one or more digits, `parse` shall return it as an id.

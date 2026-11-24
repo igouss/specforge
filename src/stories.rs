@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -6,7 +7,10 @@ use cucumber::codegen::WorldInventory;
 use cucumber::writer::{Basic, FailOnSkipped, Normalize, Summarize};
 
 use crate::assess::{self, Assessment, Binding, Finding, Progress, Standing, Stood};
+use crate::graph::{self, ArtifactId, DependencyPin, GraphSnapshot, VerificationMethod};
+use crate::ledger::{EvidenceKind, EvidenceLedger, EvidencePayload, EvidenceRecord, LedgerError, ProducerMeta};
 use crate::trace::{self, Defect, Source, Trace};
+use crate::verify::{EvaluationResult, RunState, VerificationOutcome};
 use crate::view;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,17 +175,12 @@ async fn ran<W: cucumber::World + fmt::Debug + WorldInventory>(scratch: &Path, a
     (finished.scenarios_stats().total(), finished.scenarios_stats().passed)
 }
 
-/// When a project's stories are verified or drawn, `stories` shall behave as SF-006 describes.
-pub async fn stories<W: cucumber::World + fmt::Debug + WorldInventory>(project: &Project, mode: Mode) -> Outcome {
-    let documents: Vec<Source> = match sources(&project.specifications) {
-        Ok(documents) => documents,
-        Err(outcome) => return outcome,
-    };
+async fn stories_from_sources<W: cucumber::World + fmt::Debug + WorldInventory>(project: &Project, documents: &[Source], mode: Mode) -> Outcome {
     let table: String = match fs::read_to_string(&project.pending) {
         Ok(table) => table,
         Err(error) => return unread(&project.pending, &error),
     };
-    let trace: Trace = match trace::compile(&documents) {
+    let trace: Trace = match trace::compile(documents) {
         Ok(trace) => trace,
         Err(defects) => return Outcome::Defective(defects),
     };
@@ -226,4 +225,134 @@ pub async fn stories<W: cucumber::World + fmt::Debug + WorldInventory>(project: 
         passed,
         pending,
     })
+}
+
+/// When a project's stories are verified or drawn, `stories` shall behave as SF-006 describes.
+pub async fn stories<W: cucumber::World + fmt::Debug + WorldInventory>(project: &Project, mode: Mode) -> Outcome {
+    let documents: Vec<Source> = match sources(&project.specifications) {
+        Ok(documents) => documents,
+        Err(outcome) => return outcome,
+    };
+    stories_from_sources::<W>(project, &documents, mode).await
+}
+
+/// When a project story run is recorded as evidence, `record_stories_evidence` shall seal an immutable evidence record bound to the graph snapshot and append it to the ledger.
+pub fn record_stories_evidence(
+    evidence_id: String,
+    run_id: String,
+    timestamp: String,
+    snapshot: &GraphSnapshot,
+    outcome: &Outcome,
+    claim_ids: Vec<ArtifactId>,
+    ledger: &mut EvidenceLedger,
+) -> Result<EvidenceRecord, LedgerError> {
+    for claim_id in &claim_ids {
+        if snapshot.claim(claim_id.as_str()).is_none() {
+            return Err(LedgerError::InvalidRecord {
+                id: evidence_id,
+                why: format!("unknown claim {claim_id} in snapshot"),
+            });
+        }
+    }
+    let (run_state, result, limitation): (RunState, EvaluationResult, String) = match outcome {
+        Outcome::Ran(tally) if outcome.passed() => (
+            RunState::Completed,
+            EvaluationResult::Satisfied,
+            format!(
+                "finite example-based cucumber run ({} of {} executable scenarios passed, {} pending); does not prove universal correctness",
+                tally.passed, tally.executable, tally.pending
+            ),
+        ),
+        Outcome::Ran(tally) if tally.ran > 0 && tally.passed < tally.ran => (
+            RunState::Completed,
+            EvaluationResult::Violated,
+            format!("cucumber run failed ({} of {} ran passed, {} pending)", tally.passed, tally.ran, tally.pending),
+        ),
+        Outcome::Ran(tally) => (
+            RunState::Inconclusive,
+            EvaluationResult::Inconclusive,
+            format!(
+                "incomplete cucumber run ({} of {} executable scenarios ran, {} pending)",
+                tally.ran, tally.executable, tally.pending
+            ),
+        ),
+        Outcome::Drawn(_) => (
+            RunState::Completed,
+            EvaluationResult::NotEvaluated,
+            "view drawn without executing scenarios".to_string(),
+        ),
+        Outcome::Unread(_) | Outcome::Defective(_) | Outcome::Unfit(_) | Outcome::Stale(_) => (
+            RunState::Failed,
+            EvaluationResult::InvalidEvaluation,
+            format!("pre-execution gate failed: {outcome}"),
+        ),
+    };
+    let dependencies: Vec<DependencyPin> = snapshot
+        .digests
+        .iter()
+        .map(|(artifact_id, digest): (&String, &graph::ContentHash)| DependencyPin {
+            artifact_id: artifact_id.clone(),
+            digest: digest.clone(),
+        })
+        .collect();
+    let payload: EvidencePayload = EvidencePayload {
+        id: evidence_id,
+        kind: EvidenceKind::StoryRun,
+        producer: ProducerMeta {
+            name: "cucumber".to_string(),
+            version: "0.23".to_string(),
+        },
+        adapter: ProducerMeta {
+            name: "specforge-cucumber-adapter".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+        timestamp,
+        snapshot_id: snapshot.snapshot_id.clone(),
+        source_revisions: snapshot.sources.clone(),
+        dependencies,
+        run_id,
+        activity_id: "cucumber-stories".to_string(),
+        method: VerificationMethod::ExampleBased,
+        property_id: None,
+        claim_ids,
+        scope: "project-stories".to_string(),
+        assumptions: Vec::new(),
+        run_state,
+        outcome: VerificationOutcome::Evaluation(result),
+        counterexample_id: None,
+        replay: None,
+        artifact_digests: BTreeMap::new(),
+        limitations: vec![limitation],
+    };
+    let record: EvidenceRecord = EvidenceRecord::seal(payload)?;
+    ledger.append_record(record.clone())?;
+    Ok(record)
+}
+
+/// When a project's stories are verified through the Cucumber adapter, `stories_with_evidence` shall run the project, compile its graph snapshot from the same sources, and append an immutable evidence record to the ledger.
+pub async fn stories_with_evidence<W: cucumber::World + fmt::Debug + WorldInventory>(
+    project: &Project,
+    evidence_id: String,
+    run_id: String,
+    timestamp: String,
+    claim_ids: Vec<ArtifactId>,
+    ledger: &mut EvidenceLedger,
+) -> Result<(Outcome, EvidenceRecord), String> {
+    let documents: Vec<Source> = sources(&project.specifications).map_err(|outcome: Outcome| outcome.to_string())?;
+    let snapshot: GraphSnapshot = graph::compile_graph(&documents).map_err(|defects: Vec<graph::GraphDefect>| {
+        defects
+            .into_iter()
+            .map(|defect: graph::GraphDefect| defect.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
+    })?;
+    for claim_id in &claim_ids {
+        if snapshot.claim(claim_id.as_str()).is_none() {
+            return Err(format!("unknown claim {claim_id} in snapshot"));
+        }
+    }
+    let outcome: Outcome = stories_from_sources::<W>(project, &documents, Mode::Verify).await;
+    let record: EvidenceRecord =
+        record_stories_evidence(evidence_id, run_id, timestamp, &snapshot, &outcome, claim_ids, ledger).map_err(|error: LedgerError| error.to_string())?;
+    Ok((outcome, record))
 }

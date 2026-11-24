@@ -1,5 +1,8 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
+mod adapters;
+mod evidence;
+mod graph;
 mod ledger;
 mod standing;
 mod stories;
@@ -11,8 +14,14 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use specforge::assess::{Assessment, Pending};
+use specforge::assurance::{ClaimAssessment, ImpactSet};
+use specforge::graph::{ContentHash, GraphDefect, GraphSnapshot};
+use specforge::ledger::{EvidenceLedger, EvidenceRecord, LedgerError};
+use specforge::ledger_fs::FsLedger;
+use specforge::model::GeneratedScenario;
 use specforge::stories::{Mode, Outcome, Project};
 use specforge::trace::{Defect, Trace};
+use specforge::verify::{AdapterError, Counterexample, FindingRecord, PropertyEvaluation, RunEnvelope, VerificationDecision};
 
 static STARTED: AtomicUsize = AtomicUsize::new(0);
 
@@ -29,6 +38,29 @@ pub struct Forge {
     project: Option<Project>,
     outcome: Option<Outcome>,
     ran: usize,
+    graph_documents: Vec<String>,
+    graph_compiled: Option<Result<GraphSnapshot, Vec<GraphDefect>>>,
+    baseline_snapshot: Option<GraphSnapshot>,
+    revised_snapshot: Option<GraphSnapshot>,
+    evidence_ledger: EvidenceLedger,
+    last_append: Option<Result<(), LedgerError>>,
+    fs_ledger_dir: Option<PathBuf>,
+    fs_ledger: Option<FsLedger>,
+    fs_reload: Option<Result<FsLedger, LedgerError>>,
+    blob_digests: std::collections::BTreeMap<String, ContentHash>,
+    claim_assessment: Option<ClaimAssessment>,
+    impact: Option<ImpactSet>,
+    generated_scenarios: Vec<GeneratedScenario>,
+    evaluation: Option<PropertyEvaluation>,
+    finding: Option<FindingRecord>,
+    counterexample: Option<Counterexample>,
+    original_counterexample_snapshot: Option<Counterexample>,
+    decision: Option<VerificationDecision>,
+    snapshot_digest_before_decision: Option<ContentHash>,
+    envelope: Option<RunEnvelope>,
+    replay_envelope: Option<RunEnvelope>,
+    replay_result: Option<Result<RunEnvelope, AdapterError>>,
+    cucumber_record: Option<EvidenceRecord>,
 }
 
 impl Forge {
