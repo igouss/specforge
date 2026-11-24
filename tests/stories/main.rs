@@ -1,8 +1,10 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
 mod adapters;
+mod cli;
 mod evidence;
 mod exploration;
+mod external_assurance;
 mod graph;
 mod ledger;
 mod standing;
@@ -63,6 +65,8 @@ pub struct Forge {
     replay_result: Option<Result<RunEnvelope, AdapterError>>,
     cucumber_record: Option<EvidenceRecord>,
     exploration: exploration::ExplorationState,
+    cli: cli::CliState,
+    external_assurance: external_assurance::ExternalAssuranceState,
 }
 
 impl Forge {

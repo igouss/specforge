@@ -18,12 +18,17 @@ enum LedgerEntry {
 pub struct FsLedger {
     root: PathBuf,
     inner: EvidenceLedger,
+    read_only: bool,
 }
 
 impl FsLedger {
-    /// When a filesystem ledger directory is opened, `open` shall replay its append-only JSONL log and reject any corrupt or tampered entry.
-    pub fn open(root: PathBuf) -> Result<FsLedger, LedgerError> {
-        fs::create_dir_all(root.join("blobs")).map_err(|error: std::io::Error| LedgerError::Io(error.to_string()))?;
+    fn load_from_disk(root: PathBuf, read_only: bool) -> Result<FsLedger, LedgerError> {
+        if !root.is_dir() {
+            return Err(LedgerError::Io(format!(
+                "ledger directory does not exist or is not a directory: {}",
+                root.display()
+            )));
+        }
         let log_path: PathBuf = root.join("ledger.jsonl");
         let mut inner: EvidenceLedger = EvidenceLedger::new();
         if log_path.exists() {
@@ -44,7 +49,7 @@ impl FsLedger {
             }
         }
         inner.verify_integrity()?;
-        let ledger: FsLedger = FsLedger { root, inner };
+        let ledger: FsLedger = FsLedger { root, inner, read_only };
         for record in ledger.inner.records() {
             for digest in record.artifact_digests.values() {
                 let _: Vec<u8> = ledger.read_blob(digest)?;
@@ -53,8 +58,22 @@ impl FsLedger {
         Ok(ledger)
     }
 
+    /// When a filesystem ledger directory is opened, `open` shall replay its append-only JSONL log and reject any corrupt or tampered entry.
+    pub fn open(root: PathBuf) -> Result<FsLedger, LedgerError> {
+        fs::create_dir_all(root.join("blobs")).map_err(|error: std::io::Error| LedgerError::Io(error.to_string()))?;
+        Self::load_from_disk(root, false)
+    }
+
+    /// When a filesystem ledger directory is opened read-only, `open_read_only` shall replay its JSONL log and verify every record, link, and blob without creating directories or mutating disk.
+    pub fn open_read_only(root: PathBuf) -> Result<FsLedger, LedgerError> {
+        Self::load_from_disk(root, true)
+    }
+
     /// When raw artifact bytes are stored, `write_blob` shall write them content-addressed by SHA-256 and verify any existing file with the same digest.
     pub fn write_blob(&self, bytes: &[u8]) -> Result<ContentHash, LedgerError> {
+        if self.read_only {
+            return Err(LedgerError::Io("cannot write blob to a read-only ledger".to_string()));
+        }
         let digest: ContentHash = ContentHash::of_bytes(bytes);
         let path: PathBuf = self.blob_path(&digest);
         if path.exists() {
@@ -80,6 +99,9 @@ impl FsLedger {
 
     /// When an evidence record is appended, `append_record` shall validate it without mutating state, persist and flush one canonical JSONL line to `ledger.jsonl`, and only then update memory.
     pub fn append_record(&mut self, record: EvidenceRecord) -> Result<(), LedgerError> {
+        if self.read_only {
+            return Err(LedgerError::Io("cannot append record to a read-only ledger".to_string()));
+        }
         self.inner.validate_new_record(&record)?;
         self.append_entry(&LedgerEntry::Record(Box::new(record.clone())))?;
         self.inner.append_record(record)
@@ -87,6 +109,9 @@ impl FsLedger {
 
     /// When an evidence link is appended, `append_link` shall validate it without mutating state, persist and flush one canonical JSONL line to `ledger.jsonl`, and only then update memory.
     pub fn append_link(&mut self, link: EvidenceLink) -> Result<(), LedgerError> {
+        if self.read_only {
+            return Err(LedgerError::Io("cannot append link to a read-only ledger".to_string()));
+        }
         self.inner.validate_new_link(&link)?;
         self.append_entry(&LedgerEntry::Link(link.clone()))?;
         self.inner.append_link(link)

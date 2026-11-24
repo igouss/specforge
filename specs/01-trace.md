@@ -42,6 +42,22 @@ Feature: SF-001 — a requirement heading becomes a requirement
     When the documents are compiled
     Then the trace holds no requirements
     And there are no defects
+
+  @near-miss
+  Scenario: a trailing hash in a title is kept while spaced closing hashes are stripped
+    Given the document "title-hashes.md"
+    When the documents are compiled
+    Then the trace holds the requirements "SF-930, SF-931"
+    And requirement "SF-930" has the title "support C#"
+    And requirement "SF-931" has the title "support C#"
+    And there are no defects
+
+  @near-miss
+  Scenario: a nested blockquote strips every leading quote marker
+    Given the document "nested-quote.md"
+    When the documents are compiled
+    Then requirement "SF-932" has the statement "WHEN a statement is nested, SpecForge SHALL strip every leading marker."
+    And there are no defects
 ```
 
 ### SF-002 @ v1 — a story attaches to the requirement its tag names
@@ -106,6 +122,13 @@ Feature: SF-002 — a story attaches to the requirement its tag names
     Given the document "redeclared.md"
     When the documents are compiled
     Then the defects are "redeclared.md:7: SF-910 is declared a second time"
+
+  @near-miss
+  Scenario: a story under a redeclared heading reports only the redeclaration
+    Given the document "redeclared-with-story.md"
+    When the documents are compiled
+    Then there is no trace
+    And the defects are "redeclared-with-story.md:7: SF-933 is declared a second time"
 
   @near-miss
   Scenario: a repeated scenario name is a defect

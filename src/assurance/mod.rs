@@ -87,7 +87,7 @@ fn is_proved_outcome(outcome: &VerificationOutcome) -> bool {
     }
 }
 
-fn supporting_disqualifications(record: &EvidenceRecord, claim: &VerificationClaim) -> Vec<String> {
+pub(crate) fn supporting_disqualifications(record: &EvidenceRecord, claim: &VerificationClaim) -> Vec<String> {
     let mut reasons: Vec<String> = Vec::new();
     let completed: bool = match record.run_state {
         RunState::Completed => true,

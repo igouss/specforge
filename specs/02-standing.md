@@ -49,6 +49,16 @@ Feature: SF-003 — a scenario stands as pending, executable or unbound
     Then requirement "SF-911" is "bound" with 1 of 2 scenarios executable and 1 pending
     And the scenario "a transfer during a partition is retried" of "SF-911" stands "pending"
     And there are no findings
+
+  @near-miss
+  Scenario: table rows inside fenced code blocks in the pending table are ignored
+    Given the document "standing.md"
+    And the steps "an account with 100 credits; 60 credits are transferred; the total is 100" are bound
+    And the pending table is the file "pending-fenced.md"
+    When the trace is assessed
+    Then requirement "SF-911" is "bound" with 1 of 2 scenarios executable and 1 pending
+    And the scenario "a transfer during a partition is retried" of "SF-911" stands "pending"
+    And there are no findings
 ```
 
 ### SF-004 @ v1 — what does not add up is a finding

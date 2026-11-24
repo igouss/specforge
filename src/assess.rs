@@ -105,23 +105,57 @@ impl Assessment {
     }
 }
 
-/// When a pending table is read, `pending` shall return one entry for each table row whose first cell is a requirement id and which has three cells: requirement, scenario, reason.
+fn fence(line: &str) -> Option<(char, usize, &str)> {
+    let leading_spaces: usize = line.bytes().take_while(|byte: &u8| *byte == b' ').count();
+    if leading_spaces > 3 {
+        return None;
+    }
+    let rest: &str = line.get(leading_spaces..)?;
+    let marker: char = rest.chars().next()?;
+    if marker != '`' && marker != '~' {
+        return None;
+    }
+    let count: usize = rest.chars().take_while(|c: &char| *c == marker).count();
+    if count < 3 {
+        return None;
+    }
+    let after: &str = rest.get(count..)?;
+    Some((marker, count, after))
+}
+
+fn pending_row(line: &str) -> Option<Pending> {
+    let row: &str = line.trim().strip_prefix('|')?.strip_suffix('|')?;
+    let cells: Vec<&str> = row.split('|').map(str::trim).collect();
+    let [requirement, scenario, reason] = cells.as_slice() else {
+        return None;
+    };
+    Some(Pending {
+        requirement: RequirementId::parse(requirement)?,
+        scenario: scenario.to_string(),
+        reason: reason.to_string(),
+    })
+}
+
+/// When a pending table is read, `pending` shall return one entry for each table row outside fenced code blocks whose first cell is a requirement id and which has three cells: requirement, scenario, reason.
 pub fn pending(markdown: &str) -> Vec<Pending> {
-    markdown
-        .lines()
-        .filter_map(|line: &str| {
-            let row: &str = line.trim().strip_prefix('|')?.strip_suffix('|')?;
-            let cells: Vec<&str> = row.split('|').map(str::trim).collect();
-            let [requirement, scenario, reason] = cells.as_slice() else {
-                return None;
-            };
-            Some(Pending {
-                requirement: RequirementId::parse(requirement)?,
-                scenario: scenario.to_string(),
-                reason: reason.to_string(),
-            })
-        })
-        .collect()
+    let mut entries: Vec<Pending> = Vec::new();
+    let mut open_fence: Option<(char, usize)> = None;
+    for line in markdown.lines() {
+        if let Some((open_marker, open_count)) = open_fence {
+            if fence(line).is_some_and(|(marker, count, after): (char, usize, &str)| marker == open_marker && count >= open_count && after.trim().is_empty()) {
+                open_fence = None;
+            }
+            continue;
+        }
+        if let Some((marker, count, _)) = fence(line).filter(|(marker, _, after): &(char, usize, &str)| *marker == '~' || !after.contains('`')) {
+            open_fence = Some((marker, count));
+            continue;
+        }
+        if let Some(entry) = pending_row(line) {
+            entries.push(entry);
+        }
+    }
+    entries
 }
 
 fn shown(step: &gherkin::Step) -> String {

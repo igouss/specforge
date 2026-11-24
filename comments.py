@@ -57,7 +57,13 @@ def comments(text):
             end = text.find("\n", i)
             i = len(text) if end < 0 else end
         elif text.startswith("/*", i):
-            yield i
+            doc = (
+                text.startswith("/**", i)
+                and not text.startswith("/***", i)
+                and not text.startswith("/**/", i)
+            ) or text.startswith("/*!", i)
+            if not doc:
+                yield i
             i = block_end(text, i + 2)
         elif c == '"':
             i = string_end(text, i + 1)

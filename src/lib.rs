@@ -1,7 +1,12 @@
+pub mod argument;
 pub mod assess;
 pub mod assurance;
+#[cfg(feature = "cli")]
+pub mod cli;
 pub mod corpus;
 pub mod coverage;
+pub mod dst;
+pub mod formal;
 pub mod graph;
 pub mod ledger;
 #[cfg(feature = "ledger-fs")]

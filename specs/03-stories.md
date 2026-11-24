@@ -101,6 +101,14 @@ Feature: SF-006 — a project's stories run from its specifications
     And no scenario ran
 
   @near-miss
+  Scenario: a directory named like a specification is ignored
+    Given the project "ledger"
+    And its specification directory holds a directory "notes.md"
+    When its stories are verified
+    Then the outcome reads "stories: 1 of 2 ran, 1 passed, 1 pending"
+    And the verification passes
+
+  @near-miss
   Scenario: a scratch directory that holds anything else runs nothing
     Given the project "ledger"
     And its scratch directory holds the file "notes.txt"

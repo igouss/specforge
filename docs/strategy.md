@@ -47,8 +47,8 @@ Each is the builder's choice, not the operator's statement, and names what would
 |---|---|---|
 | 1 Trace | Documents compile to a trace; an assessment joins it with bindings, pending entries and monitored ids; the view is drawn; a project's stories run in one call. SpecForge runs its own stories this way. | SF-001 to SF-006 |
 | 2 Symphony | Symphony's story runner is glue over SpecForge; its hand lists are gone; its trace view is committed and checked. | Symphony ADR 0010 |
-| 3 Verification (Phase 1 + 2) | Revision-bound `GraphSnapshot` with SHA-256 digests, typed verification artifacts in `specs/*.md`, append-only Evidence Ledger (pure core + JSONL/blob persistence), freshness/staleness impact and claim assessment, pure Rust state-machine scenario generator + trace safety evaluator, `proptest` PBT adapter with replayable shrunk counterexamples, and Cucumber evidence adapter. | SF-007 to SF-011 |
-| later | CLI tool, DST and formal verification adapters, assurance argument export, qualified statistical models. | none yet |
+| 3 Verification (Phases 1–5) | Hashed `GraphSnapshot`, typed `specforge` artifacts, append-only Evidence Ledger (`ledger` + `ledger-fs`), surgical staleness & claim assessment, state-machine generator + trace evaluator, `proptest` & Cucumber adapters, MBT coverage/corpus/planner (`SF-012`–`SF-014`), zero-dependency CLI (`SF-015`), DST & formal adapter contracts and Claim–Argument–Evidence export (`SF-016`–`SF-018`). | SF-007 to SF-018 |
+| later | Concrete external formal/DST tool bridges (TLA+, Kani, Turmoil) and optional qualified statistical models when a real sampling model exists. | none yet |
 
 ## Risks
 

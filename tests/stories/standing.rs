@@ -1,5 +1,5 @@
 use cucumber::{given, then, when};
-use specforge::assess::{assess, Assessment, Binding, Finding, Pending, Progress, Row, Standing, Stood};
+use specforge::assess::{assess, pending, Assessment, Binding, Finding, Pending, Progress, Row, Standing, Stood};
 use specforge::trace::{compile, RequirementId, Source, Trace};
 use specforge::view::drawn;
 
@@ -61,6 +61,11 @@ fn pending_names(world: &mut Forge, id: String, scenario: String) {
         scenario: unescaped(&scenario),
         reason: String::new(),
     });
+}
+
+#[given(expr = "the pending table is the file {string}")]
+fn pending_file(world: &mut Forge, name: String) {
+    world.pending.extend(pending(&fixture_text(&name)));
 }
 
 #[given(expr = "the requirements {string} are monitored")]

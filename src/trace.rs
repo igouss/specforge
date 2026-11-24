@@ -163,8 +163,18 @@ fn line_of(text: &str, offset: usize) -> usize {
     text.get(..offset).map_or(1, |before: &str| before.matches('\n').count() + 1)
 }
 
+fn strip_closing_hashes(text: &str) -> &str {
+    let trimmed: &str = text.trim_end();
+    let without_hashes: &str = trimmed.trim_end_matches('#');
+    if without_hashes.len() < trimmed.len() && (without_hashes.is_empty() || without_hashes.ends_with(|c: char| c.is_ascii_whitespace())) {
+        without_hashes.trim_end()
+    } else {
+        trimmed
+    }
+}
+
 fn heading(raw: &str) -> Option<(RequirementId, String, String)> {
-    let rest: &str = raw.trim().strip_prefix("###")?.trim_end_matches('#').trim();
+    let rest: &str = strip_closing_hashes(raw.trim().strip_prefix("###")?).trim();
     let (id, rest): (&str, &str) = rest.split_once(" @ ")?;
     let (version, title): (&str, &str) = rest.split_once(" — ")?;
     let digits: &str = version.strip_prefix('v')?;
@@ -175,12 +185,19 @@ fn heading(raw: &str) -> Option<(RequirementId, String, String)> {
     Some((RequirementId::parse(id.trim())?, version.to_string(), title.to_string()))
 }
 
+fn strip_quote_markers(mut line: &str) -> &str {
+    loop {
+        let trimmed: &str = line.trim_start();
+        match trimmed.strip_prefix('>') {
+            Some(rest) => line = rest,
+            None => return trimmed.trim_end(),
+        }
+    }
+}
+
 fn quoted(raw: &str) -> String {
     raw.lines()
-        .map(|line: &str| {
-            let line: &str = line.trim_start();
-            line.strip_prefix('>').unwrap_or(line).trim()
-        })
+        .map(strip_quote_markers)
         .filter(|line: &&str| !line.is_empty())
         .collect::<Vec<&str>>()
         .join(" ")
@@ -330,20 +347,25 @@ fn attach(block: Block, requirements: &mut [(usize, Requirement)], found: &mut V
     if !shapes.is_empty() {
         return found.extend(shapes.into_iter().map(|defect: Defect| Found { document, line, defect }));
     }
-    let Some(index): Option<usize> = requirements.iter().position(|(_, requirement): &(usize, Requirement)| requirement.id == id) else {
+    let declared: bool = requirements.iter().any(|(_, requirement): &(usize, Requirement)| requirement.id == id);
+    if !declared {
         return found.push(Found {
             document,
             line,
             defect: Defect::Undeclared { path, line, id },
         });
-    };
-    if under != Some(index) {
+    }
+    let Some(index): Option<usize> = under.filter(|index: &usize| {
+        requirements
+            .get(*index)
+            .is_some_and(|(_, requirement): &(usize, Requirement)| requirement.id == id)
+    }) else {
         return found.push(Found {
             document,
             line,
             defect: Defect::Misplaced { path, line, id },
         });
-    }
+    };
     let story: Story = Story {
         name: feature.name.clone(),
         text,

@@ -95,6 +95,11 @@ fn dangling(world: &mut Forge, name: String) {
     std::os::unix::fs::symlink(specifications.join("absent-target.md"), specifications.join(name)).expect("the link is made");
 }
 
+#[given(expr = "its specification directory holds a directory {string}")]
+fn spec_directory_holds(world: &mut Forge, name: String) {
+    fs::create_dir_all(project(world).specifications.join(name)).expect("the directory is made");
+}
+
 #[given(expr = "its scratch directory holds the file {string}")]
 fn scratch_holds(world: &mut Forge, name: String) {
     let scratch: &Path = &project(world).scratch;

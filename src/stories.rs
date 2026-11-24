@@ -100,7 +100,7 @@ fn sources(specifications: &Path) -> Result<Vec<Source>, Outcome> {
     let mut paths: Vec<PathBuf> = Vec::new();
     for entry in entries {
         let path: PathBuf = entry.map_err(|error: std::io::Error| unread(specifications, &error))?.path();
-        if path.extension().is_some_and(|extension: &std::ffi::OsStr| extension == "md") {
+        if !path.is_dir() && path.extension().is_some_and(|extension: &std::ffi::OsStr| extension == "md") {
             paths.push(path);
         }
     }

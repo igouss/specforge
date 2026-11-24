@@ -108,18 +108,19 @@ A requirement none of whose scenarios is executable is `not started`: it raises 
 
 ## Verification extension
 
-SpecForge also supports specification-driven verification ([ADR 0002](docs/adr/0002-specification-driven-verification.md), `SF-007`–`SF-011`):
+SpecForge supports specification-driven verification ([ADR 0002](docs/adr/0002-specification-driven-verification.md), `SF-007`–`SF-018`):
 
 - **Hashed graph snapshots** (`graph::compile_graph`): parses fenced `specforge` YAML blocks (`assumption`, `state_machine`, `property`, `claim`, `plan`) alongside EARS+Gherkin requirements and assigns deterministic SHA-256 digests per document, artifact, and snapshot.
-- **Append-only Evidence Ledger** (`ledger::EvidenceLedger`, plus `ledger_fs::FsLedger` behind `feature = "ledger-fs"`): immutable provenance records with self-verifying SHA-256 digests, typed links (`supports`, `contradicts`, `corroborates`, `derived_from`, `supersedes`, `invalidates`), canonical JSON export, and content-addressed blob storage.
-- **Claim assessment & surgical staleness** (`assurance::assess_claim`, `assurance::impact_set`): keeps `satisfied`, `violated`, `inconclusive`, formal `proved`/`bounded_success`, and claim statuses distinct; marks only evidence whose pinned dependencies changed as `stale`.
-- **Models, counterexamples & adapters** (`model`, `verify::VerificationAdapter`, `proptest_adapter` behind `feature = "proptest-adapter"`, and `stories::stories_with_evidence` behind `feature = "cucumber"`): transition-covering scenario generation, trace safety-property evaluation, shrunk counterexample lineage with deterministic replay, and separate `VerificationDecision` records. See [docs/adapters.md](docs/adapters.md) to integrate another engine.
+- **Append-only Evidence Ledger** (`ledger::EvidenceLedger`, plus `ledger_fs::FsLedger` behind `feature = "ledger-fs"`): immutable provenance records with self-verifying SHA-256 digests, sealed typed links (`supports`, `contradicts`, `corroborates`, `derived_from`, `supersedes`, `invalidates`), canonical JSON export, read-only verification (`open_read_only`), and content-addressed blob storage.
+- **Claim assessment, staleness & assurance arguments** (`assurance`, `argument`): keeps `satisfied`, `violated`, `inconclusive`, formal `proved`/`bounded_success`, and claim statuses distinct; marks only evidence whose pinned dependencies changed as `stale`; synthesizes Claim–Argument–Evidence structures with deterministic JSON and Markdown export (`SF-018`).
+- **Models, coverage, corpus & planner** (`model`, `coverage`, `corpus`, `planner`): transition-covering scenario generation, MBT import validation with separate state/transition/transition-pair/requirement coverage (`SF-012`), counterexample registry with causal shrink validation and regression replay (`SF-013`), and read-only exploration recommendations (`SF-014`).
+- **Engine adapters & CLI** (`verify::VerificationAdapter`, `dst`, `formal`, `proptest_adapter`, `stories::stories_with_evidence`, `cli` behind `feature = "cli"`): `proptest` PBT adapter with shrinking & deterministic replay, Cucumber evidence adapter, pure-core `DstAdapter` (`SF-016`) and `FormalAdapter` (`SF-017`) contracts, and a zero-dependency `specforge` CLI (`compile`, `assess`, `verify`, `ledger`, `impact` — `SF-015`). See [docs/adapters.md](docs/adapters.md) to integrate another engine.
 
 ## Limits today
 
-- One document format (`specs/*.md`, with `gherkin` and `specforge` fenced blocks). Scenario Outlines are refused as a defect; Background and Rule steps are folded into each scenario but not specified.
-- Only `*.md` files directly in the specification directory are read.
-- No command-line tool, DST adapter, formal model-checker adapter, or probabilistic model yet. The open work is in `.beads/` (`br ready`) and the plan in [docs/strategy.md](docs/strategy.md).
+- One document format (`specs/*.md`, with `gherkin` and `specforge` fenced blocks). Scenario Outlines are refused as a defect; Background and Rule steps are folded into each scenario but not specified (`sf-zg9`).
+- Only `*.md` files directly in the specification directory are read (directories named `*.md` are skipped).
+- Concrete external tool bridges (e.g., TLA+/TLC, Kani, Turmoil) and optional qualified statistical models remain future work. See [docs/strategy.md](docs/strategy.md) and `.beads/` (`br ready`).
 
 ## For AI agents
 

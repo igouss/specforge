@@ -14,6 +14,7 @@ cucumber = ["dep:cucumber"]
 ledger-fs = []
 proptest-adapter = ["dep:proptest"]
 verification = ["ledger-fs", "proptest-adapter"]
+cli = ["verification"]
 
 [dependencies]
 cucumber = { version = "0.23", optional = true }
@@ -29,10 +30,15 @@ sha2 = "0.10"
 [dev-dependencies]
 tokio = { version = "1", features = ["rt"] }
 
+[[bin]]
+name = "specforge"
+path = "src/main.rs"
+required-features = ["cli"]
+
 [[test]]
 name = "stories"
 harness = false
-required-features = ["cucumber", "verification"]
+required-features = ["cucumber", "verification", "cli"]
 
 [lints.rust]
 unused_must_use = "deny"
