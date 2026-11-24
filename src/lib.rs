@@ -1,10 +1,13 @@
 pub mod assess;
 pub mod assurance;
+pub mod corpus;
+pub mod coverage;
 pub mod graph;
 pub mod ledger;
 #[cfg(feature = "ledger-fs")]
 pub mod ledger_fs;
 pub mod model;
+pub mod planner;
 #[cfg(feature = "proptest-adapter")]
 pub mod proptest_adapter;
 #[cfg(feature = "cucumber")]

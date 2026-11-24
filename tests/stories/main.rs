@@ -2,6 +2,7 @@
 
 mod adapters;
 mod evidence;
+mod exploration;
 mod graph;
 mod ledger;
 mod standing;
@@ -61,6 +62,7 @@ pub struct Forge {
     replay_envelope: Option<RunEnvelope>,
     replay_result: Option<Result<RunEnvelope, AdapterError>>,
     cucumber_record: Option<EvidenceRecord>,
+    exploration: exploration::ExplorationState,
 }
 
 impl Forge {

@@ -8,7 +8,7 @@ You are welcome to change this project. It is work in progress, published so tha
 
 ## To change it so the change holds
 
-1. **The specifications are the interface.** Behaviour lives in [specs/](specs/) as EARS statements with Gherkin stories (SF-001 to SF-011). Change or add the story first, see it fail, then change the code in `src/`.
+1. **The specifications are the interface.** Behaviour lives in [specs/](specs/) as EARS statements with Gherkin stories (SF-001 to SF-014). Change or add the story first, see it fail, then change the code in `src/`.
 2. **Run `just check` before and after.** It takes seconds. A new story is unbound until its step definitions exist in `tests/stories/`; when the trace changes, `just views` redraws `docs/views/trace.md`, and you commit the redrawn view after reading its diff.
 3. **Keep the three results separate.** A defect (the documents are malformed), a finding (the trace does not add up) and a run outcome are different answers. Do not fold one into another, and never let an incomplete run report as passed: the worst bug this project can have is a false green.
 4. **Tests are the stories.** No unit tests of private functions. `just mutants` shows clauses no story pins.
