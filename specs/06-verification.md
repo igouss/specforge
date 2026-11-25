@@ -6,7 +6,7 @@ SpecForge generates traceable scenarios from behavioral models, evaluates trace-
 
 > WHEN scenarios are generated from a state machine in a graph snapshot, SpecForge SHALL record the traversal strategy, coverage objective, covered states and transitions, and source model revision for each scenario.
 >
-> WHEN a safety property is evaluated over an execution trace, SpecForge SHALL return `satisfied` if no state or step violates the predicate, `violated` with the violation step, an unresolved finding, and a concrete counterexample if a violation occurs, or `invalid_evaluation` if the predicate cannot be parsed.
+> WHEN a safety or state-invariant property is evaluated over an execution trace, SpecForge SHALL return `satisfied` if no state or step violates the predicate, `violated` with the violation step, an unresolved finding, and a concrete counterexample if a violation occurs, `inconclusive` if an input predicate observes no matching inputs, or `invalid_evaluation` if the predicate language, property kind, predicate syntax, or trace continuity is invalid.
 >
 > WHEN a verification decision disposes a finding, SpecForge SHALL record the diagnosis, rationale, disposition and approver separately from the counterexample and evidence without mutating any specification artifact.
 
@@ -20,6 +20,8 @@ Feature: SF-010 — a state machine generates traceable scenarios and evaluates 
     When scenarios are generated from state machine "SM-MSG-001"
     Then at least 2 scenarios are generated from "SM-MSG-001"
     And every generated scenario records its strategy and source model digest
+    And the generated scenarios are numbered "SCN-SM-MSG-001-001, SCN-SM-MSG-001-002, SCN-SM-MSG-001-003"
+    And every generated scenario follows valid transitions of "SM-MSG-001"
     And the generated scenarios cover transitions "deliver, acknowledge"
 
   @one @witness
@@ -36,14 +38,74 @@ Feature: SF-010 — a state machine generates traceable scenarios and evaluates 
     Then the evaluation result is "violated"
     And a finding is created with root cause "unresolved"
     And a counterexample is captured at step 3 referencing "PROP-MSG-001"
+    And the counterexample trace records 1-based steps and virtual times
     When a verification decision disposes that finding as "implementation" by "alice"
     Then the decision records diagnosis "implementation" and approver "alice"
     And the snapshot digest is unchanged
+
+  @one
+  Scenario: quoted safety predicates and negated always-state predicates evaluate accurately
+    Given a compiled snapshot from "sdv-predicates.md"
+    When property "PROP-PRED-001" is evaluated on events "deliver, ack"
+    Then the evaluation result is "satisfied"
+    And no finding is created
+    When property "PROP-PRED-001" is evaluated on events "deliver, ack, redeliver"
+    Then the evaluation result is "violated"
+    And a counterexample is captured at step 3 referencing "PROP-PRED-001"
+    When property "PROP-PRED-002" is evaluated on events "deliver, ack"
+    Then the evaluation result is "satisfied"
+    When property "PROP-PRED-002" is evaluated on events "deliver, ack, redeliver"
+    Then the evaluation result is "violated"
+    And a counterexample is captured at step 3 referencing "PROP-PRED-002"
+
+  @one
+  Scenario: state-invariant always-state predicates check initial and stepped states
+    Given a compiled snapshot from "sdv-predicates.md"
+    When property "PROP-PRED-003" is evaluated on events "tick"
+    Then the evaluation result is "satisfied"
+    And no finding is created
+    When property "PROP-PRED-003" is evaluated on events "deliver"
+    Then the evaluation result is "violated"
+    And a counterexample is captured at step 1 referencing "PROP-PRED-003"
+    When property "PROP-PRED-004" is evaluated on events "tick"
+    Then the evaluation result is "violated"
+    And a counterexample is captured at step 0 referencing "PROP-PRED-004"
+
+  @one
+  Scenario: input-constrained safety predicates distinguish satisfied, violated, and inconclusive traces
+    Given a compiled snapshot from "sdv-predicates.md"
+    When property "PROP-PRED-005" is evaluated on a trace with input "mode" set to "strict"
+    Then the evaluation result is "satisfied"
+    And no finding is created
+    When property "PROP-PRED-005" is evaluated on a trace with input "mode" set to "relaxed"
+    Then the evaluation result is "violated"
+    And a counterexample is captured at step 1 referencing "PROP-PRED-005"
+    When property "PROP-PRED-005" is evaluated on events "deliver"
+    Then the evaluation result is "inconclusive"
+    And no finding is created
 
   @near-miss
   Scenario: evaluating a compound or unparseable predicate yields invalid_evaluation
     Given a compiled snapshot from "sdv-compound-predicate.md"
     When property "PROP-CMP-001" is evaluated on the safe message trace
+    Then the evaluation result is "invalid_evaluation"
+    And no finding is created
+
+  @near-miss
+  Scenario: malformed quotes, unsupported languages or kinds, and discontinuous traces yield invalid_evaluation
+    Given a compiled snapshot from "sdv-predicates.md"
+    When property "PROP-PRED-006" is evaluated on events "deliver"
+    Then the evaluation result is "invalid_evaluation"
+    And no finding is created
+    When property "PROP-PRED-007" is evaluated on events "deliver"
+    Then the evaluation result is "invalid_evaluation"
+    When property "PROP-PRED-008" is evaluated on events "deliver"
+    Then the evaluation result is "invalid_evaluation"
+    When property "PROP-PRED-009" is evaluated on events "deliver"
+    Then the evaluation result is "invalid_evaluation"
+    When property "PROP-PRED-010" is evaluated on events "deliver"
+    Then the evaluation result is "invalid_evaluation"
+    When property "PROP-PRED-001" is evaluated on a discontinuous trace
     Then the evaluation result is "invalid_evaluation"
     And no finding is created
 ```

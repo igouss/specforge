@@ -7,6 +7,7 @@ mod exploration;
 mod external_assurance;
 mod graph;
 mod ledger;
+mod model;
 mod orchestration;
 mod standing;
 mod statistics;
@@ -71,6 +72,8 @@ pub struct Forge {
     external_assurance: external_assurance::ExternalAssuranceState,
     orchestration: orchestration::OrchestrationState,
     statistics: statistics::StatisticsState,
+    evidence_state: evidence::EvidenceState,
+    validated_digests: Vec<Option<ContentHash>>,
 }
 
 impl Forge {

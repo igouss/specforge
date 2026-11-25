@@ -120,3 +120,40 @@ fn cli_stdout_matches_export(world: &mut Forge) {
     let expected: String = reopened.ledger().export_json().expect("canonical export");
     assert_eq!(last_output(world).stdout.trim_end_matches('\n'), expected);
 }
+
+#[then("the CLI stdout ends with a single trailing newline")]
+fn cli_stdout_single_newline(world: &mut Forge) {
+    let stdout: &str = &last_output(world).stdout;
+    assert!(stdout.ends_with('\n'), "expected trailing newline in stdout: {stdout:?}");
+    assert!(!stdout.ends_with("\n\n"), "expected single trailing newline in stdout: {stdout:?}");
+}
+
+#[then(expr = "the CLI stdout shows labels {string}, {string}, and {string}")]
+fn cli_stdout_shows_three_labels(world: &mut Forge, first: String, second: String, third: String) {
+    let stdout: &str = &last_output(world).stdout;
+    for needle in [&first, &second, &third] {
+        assert!(stdout.contains(needle.as_str()), "expected stdout to contain \"{needle}\", got:\n{stdout}");
+    }
+}
+
+#[then(expr = "the CLI recommendation at index {int} targets {string} with reason {string}")]
+fn cli_recommendation_target_reason(world: &mut Forge, index: usize, target: String, reason: String) {
+    let json: Value = parsed_json(world);
+    let recs: &Vec<Value> = json.get("recommendations").and_then(Value::as_array).expect("recommendations array");
+    let rec: &Value = recs.get(index).expect("recommendation at index exists");
+    assert_eq!(rec.get("target_id").and_then(Value::as_str), Some(target.as_str()));
+    assert_eq!(rec.get("reason").and_then(Value::as_str), Some(reason.as_str()));
+}
+
+#[then(expr = "the CLI recommendation at index {int} has id {string}, target {string}, method {string}, and sole item {string}")]
+fn cli_recommendation_full_details(world: &mut Forge, index: usize, id: String, target: String, method: String, item: String) {
+    let json: Value = parsed_json(world);
+    let recs: &Vec<Value> = json.get("recommendations").and_then(Value::as_array).expect("recommendations array");
+    let rec: &Value = recs.get(index).expect("recommendation at index exists");
+    assert_eq!(rec.get("id").and_then(Value::as_str), Some(id.as_str()));
+    assert_eq!(rec.get("target_id").and_then(Value::as_str), Some(target.as_str()));
+    assert_eq!(rec.get("method").and_then(Value::as_str), Some(method.as_str()));
+    let items: &Vec<Value> = rec.get("items").and_then(Value::as_array).expect("items array");
+    assert_eq!(items.len(), 1, "expected single item in {items:?}");
+    assert_eq!(items[0].as_str(), Some(item.as_str()));
+}

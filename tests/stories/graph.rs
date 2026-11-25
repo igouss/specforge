@@ -1,8 +1,8 @@
 use cucumber::{given, then, when};
-use specforge::graph::{compile_graph, ContentHash, GraphDefect, GraphSnapshot};
+use specforge::graph::{compile_graph, ContentHash, GraphDefect, GraphSnapshot, Property, VerificationMethod};
 use specforge::trace::Source;
 
-use crate::{fixture_text, unescaped, Forge};
+use crate::{fixture_text, listed, unescaped, Forge};
 
 pub fn compile_fixture(name: &str) -> Result<GraphSnapshot, Vec<GraphDefect>> {
     let source: Source = Source {
@@ -137,5 +137,46 @@ fn graph_defect_mentions(world: &mut Forge, needle: String) {
     assert!(
         found.iter().any(|defect: &String| defect.contains(&needle)),
         "wanted defect mentioning {needle:?} in {found:?}"
+    );
+}
+
+#[then(expr = "the snapshot holds assumption {string}")]
+fn snapshot_holds_assumption(world: &mut Forge, assumption: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    assert!(snapshot.assumption(&assumption).is_some(), "missing assumption {assumption}");
+}
+
+#[then(expr = "property {string} lists verification methods {string}")]
+fn property_lists_methods(world: &mut Forge, property_id: String, expected: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let property: &Property = snapshot.property(&property_id).expect("property exists");
+    let actual: Vec<String> = property.methods.iter().map(VerificationMethod::to_string).collect();
+    assert_eq!(actual, listed(&expected, ", "));
+}
+
+#[then("the snapshot digest formats as a valid 64-character lowercase SHA-256 hex digest")]
+fn snapshot_digest_formats_hex(world: &mut Forge) {
+    let digest: &ContentHash = &current_snapshot(world).snapshot_id;
+    let rendered: String = digest.to_string();
+    assert_eq!(rendered.len(), 64, "digest display should be 64 hex chars: {rendered:?}");
+    assert_eq!(rendered, digest.as_str());
+    assert_eq!(ContentHash::from_hex(&rendered), Some(digest.clone()));
+}
+
+#[when(expr = "content digests {string} are validated")]
+fn validate_content_digests(world: &mut Forge, candidates: String) {
+    world.validated_digests = listed(&candidates, ", ")
+        .into_iter()
+        .map(|candidate: String| ContentHash::from_hex(&candidate))
+        .collect();
+}
+
+#[then("none of those content digests are accepted")]
+fn none_digests_accepted(world: &mut Forge) {
+    assert!(!world.validated_digests.is_empty());
+    assert!(
+        world.validated_digests.iter().all(Option::is_none),
+        "expected all malformed digests to be rejected, got {:?}",
+        world.validated_digests
     );
 }

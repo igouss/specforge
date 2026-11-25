@@ -263,7 +263,7 @@ pub fn record_stories_evidence(
                 tally.passed, tally.executable, tally.pending
             ),
         ),
-        Outcome::Ran(tally) if tally.ran > 0 && tally.passed < tally.ran => (
+        Outcome::Ran(tally) if tally.passed < tally.ran => (
             RunState::Completed,
             EvaluationResult::Violated,
             format!("cucumber run failed ({} of {} ran passed, {} pending)", tally.passed, tally.ran, tally.pending),

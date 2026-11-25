@@ -4,7 +4,7 @@ An assessment joins a trace with three things the consumer supplies: whether eac
 
 ### SF-003 @ v1 — a scenario stands as pending, executable or unbound
 
-> WHEN a trace is assessed, each scenario SHALL stand as pending if the pending table names it, otherwise as executable if every one of its steps (including folded `Background` steps) is bound exactly once, otherwise as unbound.
+> WHEN a trace is assessed, each scenario SHALL stand as pending if the pending table names it outside CommonMark fenced code blocks (at most three leading spaces, at least three fence characters, no backtick in a backtick fence's info string, closed only by a matching fence of at least the opening length with no trailing text), otherwise as executable if every one of its steps (including folded `Background` steps) is bound exactly once, otherwise as unbound.
 >
 > A requirement SHALL be `not started` while none of its scenarios is executable, `bound` when at least one is executable and every other is executable or pending, and `partial` otherwise. A requirement that is not started SHALL raise no finding for its unbound steps.
 
@@ -58,6 +58,17 @@ Feature: SF-003 — a scenario stands as pending, executable or unbound
     When the trace is assessed
     Then requirement "SF-911" is "bound" with 1 of 2 scenarios executable and 1 pending
     And the scenario "a transfer during a partition is retried" of "SF-911" stands "pending"
+    And there are no findings
+
+  @near-miss
+  Scenario: CommonMark fence rules govern which pending table rows are ignored
+    Given the document "standing.md"
+    And the steps "an account with 100 credits; 60 credits are transferred; the total is 100" are bound
+    And the pending table is the file "pending-fence-edges.md"
+    When the trace is assessed
+    Then requirement "SF-911" is "bound" with 1 of 2 scenarios executable and 1 pending
+    And the scenario "a transfer during a partition is retried" of "SF-911" stands "pending"
+    And the scenario "a node restarts" of "SF-912" stands "pending"
     And there are no findings
 
   @near-miss

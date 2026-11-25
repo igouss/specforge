@@ -17,6 +17,8 @@ The `specforge` CLI exposes graph compilation, claim assessment, property-based 
 > WHEN `specforge argument <specs-dir> --ledger <dir> --claim <id> [--subclaim <id>...] [--json]` is invoked, SpecForge SHALL open the filesystem ledger read-only without mutating disk, synthesize an assurance argument for the root claim and optional subclaims, emit deterministic Markdown by default or canonical JSON with `--json`, exit `0` only when the argument status is `supported`, exit `1` for any non-supported status, and exit `2` on defects, unknown, duplicate, or self-referencing claims, invalid usage, or ledger errors.
 >
 > WHEN `specforge recommend <specs-dir> --ledger <dir> [--json]` is invoked, SpecForge SHALL open the filesystem ledger read-only without mutating disk, assess all claims in the snapshot, hydrate persisted counterexample blobs into a counterexample corpus, compute exploration recommendations while ensuring every `refuted` claim emits an actionable recommendation, emit a human-readable list or canonical JSON with `--json`, exit `0` when zero recommendations are emitted, exit `1` when one or more recommendations exist, and exit `2` on defects, invalid usage, or ledger errors.
+>
+> WHEN `specforge` is invoked with `--help` or `-h`, SpecForge SHALL print usage text ending with a single trailing newline and exit `0`; WHEN any subcommand receives an unknown flag, missing flag value, inline value on a boolean flag, or unexpected positional argument, SpecForge SHALL exit `2` naming the error and usage on stderr; and WHEN `verify` records evidence into `--ledger <dir>`, SpecForge SHALL skip colliding `EV-CLI-<n>` identifiers and stamp ISO-8601 UTC timestamps from `SOURCE_DATE_EPOCH` when set or the system clock otherwise.
 
 ```gherkin
 @SF-015 @v1
@@ -29,6 +31,7 @@ Feature: SF-015 — the CLI compiles specifications, verifies properties, assess
     Then the CLI exits with code 0
     And the CLI stdout contains "snapshot_id:"
     And the CLI stdout contains "PROP-MSG-001"
+    And the CLI stdout ends with a single trailing newline
     When the CLI runs compile with JSON output on the valid specification directory
     Then the CLI exits with code 0
     And the CLI JSON field "snapshot_id" is a 64-character hex digest
@@ -57,6 +60,7 @@ Feature: SF-015 — the CLI compiles specifications, verifies properties, assess
     Then the CLI exits with code 0
     And the CLI JSON field "outcome" equals "satisfied"
     And the CLI JSON field "evidence_id" equals "EV-CLI-1"
+    And the recorded ledger timestamp for "EV-CLI-1" matches the system clock in UTC
     When the CLI assesses the safe specification directory against the ledger
     Then the CLI exits with code 0
     And the CLI stdout contains "CLM-MSG-001"
@@ -144,6 +148,7 @@ Feature: SF-015 — the CLI compiles specifications, verifies properties, assess
     Then the CLI exits with code 1
     And the CLI stdout contains "# Assurance Argument: CLM-MSG-001"
     And the CLI stdout contains "Status: `inconclusive`"
+    And the CLI stdout ends with a single trailing newline
     And the empty ledger directory has no blobs subdirectory created
     When the CLI verifies property "PROP-MSG-001" for claim "CLM-MSG-001" with seed 7 and budget 16 into the ledger as JSON
     Then the CLI exits with code 0
@@ -210,11 +215,41 @@ Feature: SF-015 — the CLI compiles specifications, verifies properties, assess
     Then the CLI exits with code 1
     And the CLI JSON field "clean" equals boolean false
     And the CLI JSON array "recommendations" has length 1
-    And the CLI stdout contains "regression_counterexample"
-    Given a CLI workspace with a violating specification directory and a blobless violated ledger
+    And the CLI recommendation at index 0 targets "PROP-MSG-001" with reason "regression_counterexample"
+    Given a CLI workspace with a violating assurance directory, a hydrated counterexample for "CLM-MSG-001", and blobless mixed evidence for "CLM-MSG-002"
     When the CLI runs recommend on the violating directory against the ledger as JSON
     Then the CLI exits with code 1
-    And the CLI JSON field "clean" equals boolean false
-    And the CLI JSON array "recommendations" has length 1
-    And the CLI stdout contains "regression_counterexample"
+    And the CLI JSON array "recommendations" has length 2
+    And the CLI recommendation at index 0 targets "PROP-MSG-001" with reason "regression_counterexample"
+    And the CLI recommendation at index 1 has id "REC-002", target "CLM-MSG-002", method "deterministic_simulation", and sole item "EV-BLOBLESS-2"
+
+  @one @witness
+  Scenario: CLI binary, help flags, argument errors, human labels, ID collisions, and UTC timestamps
+    Given a CLI workspace with baseline, unrelated-edit, and property-edit safe specification directories
+    When the specforge binary runs with "--help"
+    Then the CLI exits with code 0
+    And the CLI stdout contains "Usage:"
+    And the CLI stdout ends with a single trailing newline
+    When the specforge binary runs with "-h"
+    Then the CLI exits with code 0
+    And the CLI stdout contains "specforge compile"
+    When the specforge binary runs with "unknown-cmd"
+    Then the CLI exits with code 2
+    And the CLI stderr contains "unknown subcommand"
+    When the CLI checks malformed flags, inline values, missing values, and extra arguments
+    Then every subcommand rejects malformed CLI invocations with exit 2 and diagnostic stderr
+    When the CLI computes human-readable impact from baseline to property-edit against the ledger
+    Then the CLI exits with code 1
+    And the CLI stdout contains "stale_evidence_ids: none"
+    And the CLI stdout contains "affected_claim_ids: CLM-MSG-001"
+    When the ledger is seeded with colliding record "EV-CLI-2" and a supports link
+    And the CLI runs ledger list on the ledger directory
+    Then the CLI exits with code 0
+    And the CLI stdout shows labels "property_evaluation", "property_based", and "--supports-->"
+    When the specforge binary verifies "PROP-MSG-001" for "CLM-MSG-001" at epoch 951868799 into the ledger
+    Then the CLI exits with code 0
+    And the CLI JSON field "evidence_id" equals "EV-CLI-3"
+    And the CLI JSON field "run_id" equals "RUN-CLI-3"
+    And the recorded ledger timestamp for "EV-CLI-3" equals "2000-02-29T23:59:59Z"
+    And the specforge binary records exact UTC timestamps for epochs 4102448523, 4107575742, and 7275011696
 ```

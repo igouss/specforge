@@ -130,14 +130,11 @@ pub(crate) fn run_assess(specs_dir: &Path, ledger_dir: &Path, claim_filter: Opti
 }
 
 fn next_evidence_ids(ledger: &FsLedger) -> (String, String) {
-    let mut index: usize = ledger.ledger().records().len() + 1;
-    loop {
-        let evidence_id: String = format!("EV-CLI-{index}");
-        if ledger.ledger().get(&evidence_id).is_none() {
-            return (evidence_id, format!("RUN-CLI-{index}"));
-        }
-        index += 1;
-    }
+    let start: usize = ledger.ledger().records().len() + 1;
+    let index: usize = (start..=usize::MAX)
+        .find(|candidate: &usize| ledger.ledger().get(&format!("EV-CLI-{candidate}")).is_none())
+        .unwrap_or(start);
+    (format!("EV-CLI-{index}"), format!("RUN-CLI-{index}"))
 }
 
 fn persist_envelope(ledger: &mut FsLedger, snapshot: &GraphSnapshot, envelope: &RunEnvelope, evidence_id: String) -> Result<Option<ContentHash>, String> {

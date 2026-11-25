@@ -100,11 +100,20 @@ fn with_trailing_newline(mut text: String) -> String {
     text
 }
 
-pub(crate) fn utc_timestamp_now() -> String {
-    let seconds: u64 = match SystemTime::now().duration_since(UNIX_EPOCH) {
+fn unix_seconds_now() -> u64 {
+    if let Ok(raw) = std::env::var("SOURCE_DATE_EPOCH") {
+        if let Ok(parsed) = raw.parse::<u64>() {
+            return parsed;
+        }
+    }
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_secs(),
         Err(_) => 0,
-    };
+    }
+}
+
+pub(crate) fn utc_timestamp_now() -> String {
+    let seconds: u64 = unix_seconds_now();
     let days: i64 = (seconds / 86_400) as i64;
     let time_of_day: u64 = seconds % 86_400;
     let hour: u64 = time_of_day / 3_600;

@@ -18,7 +18,7 @@ pub(crate) fn hydrate_corpus(snapshot: &GraphSnapshot, fs_ledger: &FsLedger) -> 
         for key in ["original_counterexample", "counterexample"] {
             if let Some(digest) = record.artifact_digests.get(key) {
                 let counterexample: Counterexample = read_counterexample_blob(fs_ledger, digest)?;
-                if counterexample.original_id.is_none() && counterexample.minimization.is_none() {
+                if counterexample.original_id.is_none() {
                     originals.push(counterexample);
                 } else {
                     minimized.push(counterexample);

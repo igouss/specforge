@@ -4,7 +4,7 @@ One call runs a project's stories: the consumer names its specification director
 
 ### SF-006 @ v1 — a project's stories run from its specifications
 
-> WHEN a project's stories are verified, SpecForge SHALL compile every `*.md` file directly in the specification directory, in file-name order, assess the trace against the world's step definitions, the pending table and the monitored ids, and run exactly the executable scenarios (including scenarios inside `Rule`s with their folded `Background` steps), from features written to the scratch directory and never beside the specifications.
+> WHEN a project's stories are verified, SpecForge SHALL compile every `*.md` file directly in the specification directory, in file-name order, assess the trace against the world's step definitions, the pending table and the monitored ids, and run exactly the executable scenarios (including scenarios inside `Rule`s with their folded `Background` steps), from features written to the scratch directory (`<ID>.feature` when a requirement has one story, `<ID>-<N>.feature` in story order when it has several) and never beside the specifications.
 >
 > IF a file cannot be read, the documents are defective, the assessment is unfit, or the committed view differs from the drawn one, THEN SpecForge SHALL run no scenario and SHALL report which, naming every defect or finding.
 >
@@ -15,6 +15,8 @@ One call runs a project's stories: the consumer names its specification director
 > WHEN a project's view is drawn, SpecForge SHALL write the view of a fit assessment to the view path and SHALL run no scenario.
 >
 > A run SHALL report `stories: <ran> of <scenarios> ran, <passed> passed, <pending> pending`, where scenarios counts those of requirements that have started.
+>
+> WHEN a story outcome is recorded as evidence against a graph snapshot, SpecForge SHALL seal an evidence record with run state `completed` and result `satisfied` for a passing run, `completed` and `violated` when at least one executed scenario failed, `inconclusive` and `inconclusive` when zero scenarios ran or fewer than all executable scenarios ran without failure, `completed` and `not_evaluated` for a drawn view, and `failed` and `invalid_evaluation` when a pre-execution gate (`unread`, `defective`, `unfit`, or `stale`) stopped the run.
 
 ```gherkin
 @SF-006 @v1
@@ -26,6 +28,7 @@ Feature: SF-006 — a project's stories run from its specifications
     When its stories are verified
     Then the outcome reads "stories: 1 of 2 ran, 1 passed, 1 pending"
     And the verification passes
+    And the scratch directory holds the feature files "SF-921.feature"
     And no feature file lies in its specification directory
 
   @zero @near-miss
@@ -144,4 +147,98 @@ Feature: SF-006 — a project's stories run from its specifications
     Then the outcome reads "stories: 3 of 4 ran, 3 passed, 1 pending"
     And the verification passes
     And no feature file lies in its specification directory
+
+  @many
+  Scenario: multiple stories under one requirement write numbered feature files and run
+    Given the project "ledger"
+    And its specification "ledger.md" is replaced by the document "ledger-multi-story.md"
+    And its pending table is emptied
+    And its view is drawn
+    When its stories are verified
+    Then the outcome reads "stories: 2 of 2 ran, 2 passed, 0 pending"
+    And the verification passes
+    And the scratch directory holds the feature files "SF-921-1.feature, SF-921-2.feature"
+    And no feature file lies in its specification directory
+
+  @near-miss
+  Scenario: recording a failing story run emits violated evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    And its specification "ledger.md" is replaced by the document "ledger-broken.md"
+    And its view is drawn
+    When its stories are verified
+    And the project outcome is recorded as evidence
+    Then the recorded story evidence has run state "completed" and evaluation result "violated"
+    And the ledger holds 1 evidence record
+    And ledger integrity verification passes
+
+  @zero @near-miss
+  Scenario: recording a zero-scenario story run emits inconclusive evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    And its specification "ledger.md" is replaced by the document "one-requirement.md"
+    And its pending table is emptied
+    And its view is drawn
+    When its stories are verified
+    And the project outcome is recorded as evidence
+    Then the recorded story evidence has run state "inconclusive" and evaluation result "inconclusive"
+    And the ledger holds 1 evidence record
+
+  @near-miss
+  Scenario: recording a partial story run emits inconclusive evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    When a partial story run of 1 passed out of 1 ran and 2 executable is recorded as evidence
+    Then the recorded story evidence has run state "inconclusive" and evaluation result "inconclusive"
+    And the ledger holds 1 evidence record
+
+  @one
+  Scenario: recording a drawn view emits not_evaluated evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    And its committed view is deleted
+    When its view is drawn
+    And the project outcome is recorded as evidence
+    Then the recorded story evidence has run state "completed" and evaluation result "not_evaluated"
+    And the ledger holds 1 evidence record
+
+  @near-miss
+  Scenario: recording a stale view outcome emits invalid_evaluation evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    And its committed view is replaced by the file "empty.view.md"
+    When its stories are verified
+    And the project outcome is recorded as evidence
+    Then the recorded story evidence has run state "failed" and evaluation result "invalid_evaluation"
+    And the ledger holds 1 evidence record
+
+  @near-miss
+  Scenario: recording an unfit assessment outcome emits invalid_evaluation evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    And its pending table is emptied
+    When its stories are verified
+    And the project outcome is recorded as evidence
+    Then the recorded story evidence has run state "failed" and evaluation result "invalid_evaluation"
+    And the ledger holds 1 evidence record
+
+  @near-miss
+  Scenario: recording a defective specification outcome emits invalid_evaluation evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    And its specification "ledger.md" is replaced by the document "untagged.md"
+    When its stories are verified
+    And the project outcome is recorded as evidence
+    Then the recorded story evidence has run state "failed" and evaluation result "invalid_evaluation"
+    And the ledger holds 1 evidence record
+
+  @near-miss
+  Scenario: recording an unread specification outcome emits invalid_evaluation evidence
+    Given the project "ledger"
+    And an empty evidence ledger
+    And its specification directory holds a link "missing.md" to a document that does not exist
+    When its stories are verified
+    And the project outcome is recorded as evidence
+    Then the recorded story evidence has run state "failed" and evaluation result "invalid_evaluation"
+    And the ledger holds 1 evidence record
 ```

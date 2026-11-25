@@ -141,13 +141,6 @@ fn no_trace(world: &mut Forge) {
     assert!(matches!(world.compiled, Some(Err(_))), "a trace was compiled");
 }
 
-#[then(expr = "the only defect starts with {string}")]
-fn only_defect(world: &mut Forge, start: String) {
-    let found: Vec<String> = defects(world);
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert!(found.iter().all(|defect: &String| defect.starts_with(&unescaped(&start))), "{found:?}");
-}
-
 #[then(expr = "the defects are {string}")]
 fn defects_are(world: &mut Forge, expected: String) {
     assert_eq!(defects(world), listed(&expected, "; "));

@@ -1,7 +1,7 @@
+mod fs_ledger;
+mod validation;
+
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cucumber::{given, then, when};
 use specforge::assurance::{assess_claim, impact_set, ClaimAssessment, EvidenceEvaluationEntry, ImpactSet};
@@ -13,10 +13,18 @@ use specforge::verify::{EvaluationResult, FormalOutcome, RunState, VerificationO
 use crate::graph::{compile_fixture, current_snapshot};
 use crate::Forge;
 
-static LEDGER_DIRS: AtomicUsize = AtomicUsize::new(0);
+#[derive(Debug, Default)]
+pub struct EvidenceState {
+    pub last_record_seal: Option<Result<EvidenceRecord, LedgerError>>,
+    pub last_link_seal: Option<Result<EvidenceLink, LedgerError>>,
+    pub last_exported_json: Option<String>,
+    pub last_json_import: Option<Result<EvidenceLedger, String>>,
+    pub fs_read_only: Option<FsLedger>,
+    pub fs_blob_write: Option<Result<ContentHash, LedgerError>>,
+}
 
 #[allow(clippy::too_many_arguments)]
-fn build_record_with_scope(
+pub(super) fn build_payload_with_scope(
     snapshot: &GraphSnapshot,
     id: &str,
     property_id: &str,
@@ -25,11 +33,11 @@ fn build_record_with_scope(
     method: VerificationMethod,
     outcome: VerificationOutcome,
     artifact_digests: BTreeMap<String, ContentHash>,
-) -> EvidenceRecord {
+) -> EvidencePayload {
     let prop_id: ArtifactId = ArtifactId::parse(property_id).expect("valid property id");
     let clm_id: ArtifactId = ArtifactId::parse(claim_id).expect("valid claim id");
     let dependencies: Vec<DependencyPin> = snapshot.dependency_pins_for_claim(claim_id);
-    let payload: EvidencePayload = EvidencePayload {
+    EvidencePayload {
         id: id.to_string(),
         kind: EvidenceKind::PropertyEvaluation,
         producer: ProducerMeta {
@@ -57,11 +65,25 @@ fn build_record_with_scope(
         replay: None,
         artifact_digests,
         limitations: vec!["finite test run".to_string()],
-    };
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_record_with_scope(
+    snapshot: &GraphSnapshot,
+    id: &str,
+    property_id: &str,
+    claim_id: &str,
+    scope: &str,
+    method: VerificationMethod,
+    outcome: VerificationOutcome,
+    artifact_digests: BTreeMap<String, ContentHash>,
+) -> EvidenceRecord {
+    let payload: EvidencePayload = build_payload_with_scope(snapshot, id, property_id, claim_id, scope, method, outcome, artifact_digests);
     EvidenceRecord::seal(payload).expect("evidence record seals")
 }
 
-fn build_record(
+pub(super) fn build_record(
     snapshot: &GraphSnapshot,
     id: &str,
     property_id: &str,
@@ -71,6 +93,18 @@ fn build_record(
     artifact_digests: BTreeMap<String, ContentHash>,
 ) -> EvidenceRecord {
     build_record_with_scope(snapshot, id, property_id, claim_id, "single-broker", method, outcome, artifact_digests)
+}
+
+pub(super) fn parse_relation(relation: &str) -> EvidenceRelation {
+    match relation {
+        "supports" => EvidenceRelation::Supports,
+        "contradicts" => EvidenceRelation::Contradicts,
+        "corroborates" => EvidenceRelation::Corroborates,
+        "derived_from" => EvidenceRelation::DerivedFrom,
+        "supersedes" => EvidenceRelation::Supersedes,
+        "invalidates" => EvidenceRelation::Invalidates,
+        other => panic!("unknown relation {other}"),
+    }
 }
 
 #[given("an empty evidence ledger")]
@@ -196,15 +230,7 @@ fn refused_invalid_digest(world: &mut Forge) {
 
 #[when(expr = "a link {string} is appended from {string} to {string}")]
 fn append_link(world: &mut Forge, relation: String, from_id: String, to_id: String) {
-    let relation: EvidenceRelation = match relation.as_str() {
-        "supports" => EvidenceRelation::Supports,
-        "contradicts" => EvidenceRelation::Contradicts,
-        "corroborates" => EvidenceRelation::Corroborates,
-        "derived_from" => EvidenceRelation::DerivedFrom,
-        "supersedes" => EvidenceRelation::Supersedes,
-        "invalidates" => EvidenceRelation::Invalidates,
-        other => panic!("unknown relation {other}"),
-    };
+    let relation: EvidenceRelation = parse_relation(&relation);
     let link: EvidenceLink = EvidenceLink::seal(from_id, to_id, relation, "recorded in story".to_string()).expect("link seals");
     world.evidence_ledger.append_link(link).expect("link appends");
 }
@@ -224,6 +250,7 @@ fn ledger_export_deterministic(world: &mut Forge) {
     let first: String = world.evidence_ledger.export_json().expect("first export");
     let second: String = world.evidence_ledger.export_json().expect("second export");
     assert_eq!(first, second);
+    world.evidence_state.last_exported_json = Some(first);
 }
 
 #[then(regex = r#"^record "([^"]+)"(?: still)? has evaluation result "([^"]+)"$"#)]
@@ -233,88 +260,6 @@ fn record_eval_result(world: &mut Forge, id: String, expected: String) {
         VerificationOutcome::Evaluation(result) => assert_eq!(result.to_string(), expected),
         other => panic!("expected evaluation outcome, got {other:?}"),
     }
-}
-
-#[given("a temporary filesystem ledger")]
-fn temp_fs_ledger(world: &mut Forge) {
-    let dir: PathBuf = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("ledgers")
-        .join(LEDGER_DIRS.fetch_add(1, Ordering::SeqCst).to_string());
-    if dir.exists() {
-        fs::remove_dir_all(&dir).expect("stale ledger dir removed");
-    }
-    let fs_ledger: FsLedger = FsLedger::open(dir.clone()).expect("fs ledger opens");
-    world.fs_ledger_dir = Some(dir);
-    world.fs_ledger = Some(fs_ledger);
-}
-
-#[given(expr = "a satisfied evidence record {string} with blob payload {string} is persisted")]
-#[when(expr = "a satisfied evidence record {string} with blob payload {string} is persisted")]
-fn persist_record_with_blob(world: &mut Forge, id: String, payload: String) {
-    let snapshot: GraphSnapshot = current_snapshot(world).clone();
-    let fs_ledger: &mut FsLedger = world.fs_ledger.as_mut().expect("fs ledger opened");
-    let digest: ContentHash = fs_ledger.write_blob(payload.as_bytes()).expect("blob written");
-    let mut digests: BTreeMap<String, ContentHash> = BTreeMap::new();
-    digests.insert("trace".to_string(), digest.clone());
-    let record: EvidenceRecord = build_record(
-        &snapshot,
-        &id,
-        "PROP-MSG-001",
-        "CLM-MSG-001",
-        VerificationMethod::PropertyBased,
-        VerificationOutcome::Evaluation(EvaluationResult::Satisfied),
-        digests,
-    );
-    fs_ledger.append_record(record).expect("record persisted");
-    world.blob_digests.insert(id, digest);
-}
-
-#[when("the filesystem ledger is reloaded")]
-fn reload_fs_ledger(world: &mut Forge) {
-    let dir: PathBuf = world.fs_ledger_dir.clone().expect("fs ledger dir set");
-    world.fs_reload = Some(FsLedger::open(dir));
-}
-
-#[then(expr = "the reloaded ledger holds {int} evidence record")]
-fn reloaded_count(world: &mut Forge, expected: usize) {
-    let loaded: &FsLedger = world.fs_reload.as_ref().expect("reloaded").as_ref().expect("reload succeeded");
-    assert_eq!(loaded.ledger().records().len(), expected);
-}
-
-#[then(expr = "the blob for {string} reads back as {string}")]
-fn blob_reads_back(world: &mut Forge, id: String, expected: String) {
-    let loaded: &FsLedger = world.fs_reload.as_ref().expect("reloaded").as_ref().expect("reload succeeded");
-    let digest: &ContentHash = world.blob_digests.get(&id).expect("digest recorded");
-    let bytes: Vec<u8> = loaded.read_blob(digest).expect("blob reads back");
-    assert_eq!(String::from_utf8(bytes).expect("utf8"), expected);
-}
-
-#[when("the persisted ledger file is tampered with")]
-fn tamper_fs_ledger(world: &mut Forge) {
-    let dir: &Path = world.fs_ledger_dir.as_ref().expect("fs ledger dir set");
-    let log_path: PathBuf = dir.join("ledger.jsonl");
-    let content: String = fs::read_to_string(&log_path).expect("log read");
-    let tampered: String = content.replace("single-broker", "tampered-broker");
-    assert_ne!(content, tampered);
-    fs::write(&log_path, tampered).expect("tampered log written");
-}
-
-#[then("reloading the filesystem ledger fails with an integrity error")]
-fn reload_fails_integrity(world: &mut Forge) {
-    assert!(matches!(world.fs_reload, Some(Err(LedgerError::InvalidDigest(_)))), "{:?}", world.fs_reload);
-}
-
-#[when(expr = "the stored blob for {string} is tampered with")]
-fn tamper_stored_blob(world: &mut Forge, id: String) {
-    let dir: &Path = world.fs_ledger_dir.as_ref().expect("fs ledger dir set");
-    let digest: &ContentHash = world.blob_digests.get(&id).expect("digest recorded");
-    let blob_path: PathBuf = dir.join("blobs").join(digest.as_str());
-    fs::write(&blob_path, b"tampered-blob-bytes").expect("tampered blob written");
-}
-
-#[then("reloading the filesystem ledger fails with a blob integrity error")]
-fn reload_fails_blob_integrity(world: &mut Forge) {
-    assert!(matches!(world.fs_reload, Some(Err(LedgerError::BlobIntegrity { .. }))), "{:?}", world.fs_reload);
 }
 
 #[when(expr = "the snapshot changes to {string}")]

@@ -1,5 +1,6 @@
 mod assertions;
 mod extended;
+mod hardening;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,6 +28,7 @@ pub struct CliState {
     pub ledger_dir: Option<PathBuf>,
     pub expected_multi_snapshot: Option<String>,
     pub last_output: Option<CliOutput>,
+    pub malformed_checks: Vec<(String, CliOutput)>,
 }
 
 pub(super) fn fresh_workspace() -> PathBuf {

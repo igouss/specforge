@@ -64,7 +64,7 @@ Feature: SF-001 — a requirement heading becomes a requirement
 
 > WHEN a document holds a fenced `gherkin` block, SpecForge SHALL attach the block's feature, as a story, to the requirement named by the feature's `@<ID>` tag, with the name, tags and steps of every top-level scenario and every scenario inside each `Rule` in document order, the block's text and the line of its opening fence. Feature `Background` steps SHALL prepend to every scenario in the feature; a `Rule` `Background`'s steps SHALL prepend after the feature `Background` to every scenario inside that `Rule` only.
 >
-> IF a block cannot be parsed, carries no requirement tag or more than one, holds a scenario (top-level or inside a `Rule`) with no folded steps or with an Examples table (a Scenario Outline), names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement (including across `Rule`s), or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
+> IF a block cannot be parsed (reporting the parser diagnostic before any raw `: {` detail), carries no requirement tag or more than one, holds a scenario (top-level or inside a `Rule`) with no folded steps or with an Examples table (a Scenario Outline), names a requirement that no heading declares, or does not sit between the heading of the requirement it names and the next requirement heading; or IF an id is declared a second time, a scenario name repeats within one requirement (including across `Rule`s), or a requirement has no statement, THEN SpecForge SHALL yield no trace and SHALL report every such defect as `<path>:<line>: <sentence>`. The line is the opening fence for a defect of a block and the heading for a defect of a requirement.
 
 ```gherkin
 @SF-002 @v1
@@ -96,7 +96,7 @@ Feature: SF-002 — a story attaches to the requirement its tag names
     Given the document "unparseable.md"
     When the documents are compiled
     Then there is no trace
-    And the only defect starts with "unparseable.md:7: the story cannot be parsed: "
+    And the defects are "unparseable.md:7: the story cannot be parsed: Error at 2:14"
 
   @near-miss
   Scenario: a story with no requirement tag is a defect

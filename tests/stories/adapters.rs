@@ -3,19 +3,16 @@ use std::collections::BTreeMap;
 
 use cucumber::{given, then, when};
 use specforge::assurance::{assess_claim, ClaimAssessment};
-use specforge::graph::{ArtifactId, ContentHash, GraphSnapshot, Property, StateMachine, VerificationClaim};
+use specforge::graph::{ArtifactId, GraphSnapshot, StateMachine, VerificationClaim};
 use specforge::ledger::{EvidenceKind, EvidenceRecord};
-use specforge::model::{evaluate_property, execute_machine, generate_scenarios, GeneratedScenario};
+use specforge::model::execute_machine;
 use specforge::proptest_adapter::ProptestAdapter;
 use specforge::stories::{stories_with_evidence, Outcome, Project};
-use specforge::verify::{
-    AdapterError, Counterexample, ExecutionTrace, FindingRecord, PropertyEvaluation, ReplayDescriptor, RootCause, RunEnvelope, TraceEvent, VerificationAdapter,
-    VerificationDecision, VerificationOutcome, VerificationRequest,
-};
+use specforge::verify::{AdapterError, Counterexample, ExecutionTrace, RunEnvelope, TraceEvent, VerificationAdapter, VerificationOutcome, VerificationRequest};
 
 use crate::graph::current_snapshot;
 use crate::ledger::{Ledger, RAN};
-use crate::{listed, Forge};
+use crate::Forge;
 
 fn safe_broker_runner(machine: &StateMachine, events: &[String]) -> ExecutionTrace {
     let mut current: String = machine.initial.clone();
@@ -45,139 +42,6 @@ fn safe_broker_runner(machine: &StateMachine, events: &[String]) -> ExecutionTra
 
 fn buggy_broker_runner(machine: &StateMachine, events: &[String]) -> ExecutionTrace {
     execute_machine(machine, events)
-}
-
-#[when(expr = "scenarios are generated from state machine {string}")]
-fn gen_scenarios(world: &mut Forge, machine_id: String) {
-    let snapshot: &GraphSnapshot = current_snapshot(world);
-    world.generated_scenarios = generate_scenarios(snapshot, &machine_id).expect("scenarios generated");
-}
-
-#[then(expr = "at least {int} scenarios are generated from {string}")]
-fn at_least_scenarios(world: &mut Forge, min_count: usize, machine_id: String) {
-    assert!(world.generated_scenarios.len() >= min_count, "{:?}", world.generated_scenarios);
-    for scenario in &world.generated_scenarios {
-        assert_eq!(scenario.model_id.as_str(), machine_id);
-    }
-}
-
-#[then("every generated scenario records its strategy and source model digest")]
-fn scenarios_record_provenance(world: &mut Forge) {
-    let snapshot: &GraphSnapshot = current_snapshot(world);
-    for scenario in &world.generated_scenarios {
-        assert!(!scenario.strategy.is_empty());
-        assert_eq!(Some(&scenario.model_digest), snapshot.artifact_digest(scenario.model_id.as_str()));
-    }
-}
-
-#[then(expr = "the generated scenarios cover transitions {string}")]
-fn scenarios_cover_transitions(world: &mut Forge, names: String) {
-    let covered: Vec<String> = world
-        .generated_scenarios
-        .iter()
-        .flat_map(|scenario: &GeneratedScenario| scenario.covered_transitions.clone())
-        .collect();
-    for expected in listed(&names, ", ") {
-        assert!(covered.contains(&expected), "missing transition {expected} in {covered:?}");
-    }
-}
-
-fn eval_on_events(world: &mut Forge, property_id: &str, events: &[&str]) {
-    let snapshot: &GraphSnapshot = current_snapshot(world);
-    let property: &Property = snapshot.property(property_id).expect("property exists");
-    let digest: &ContentHash = snapshot.artifact_digest(property_id).expect("digest exists");
-    let machine: &StateMachine = snapshot.state_machine(property.subject.as_str()).expect("machine exists");
-    let event_list: Vec<String> = events.iter().map(|s: &&str| (*s).to_string()).collect();
-    let trace: ExecutionTrace = execute_machine(machine, &event_list);
-    let replay: ReplayDescriptor = ReplayDescriptor {
-        engine: "specforge-model".to_string(),
-        engine_version: env!("CARGO_PKG_VERSION").to_string(),
-        seed: None,
-        replay_token: None,
-        events: event_list,
-        determinism: "deterministic state-machine trace".to_string(),
-        replayable: true,
-    };
-    let snapshot_id: ContentHash = snapshot.snapshot_id.clone();
-    let (evaluation, finding, counterexample): (PropertyEvaluation, Option<FindingRecord>, Option<Counterexample>) =
-        evaluate_property(property, digest, &trace, "RUN-EVAL-001", &snapshot_id, replay);
-    world.evaluation = Some(evaluation);
-    world.finding = finding;
-    world.counterexample = counterexample;
-    world.snapshot_digest_before_decision = Some(snapshot_id);
-}
-
-#[when(expr = "property {string} is evaluated on the safe message trace")]
-fn eval_safe_trace(world: &mut Forge, property_id: String) {
-    eval_on_events(world, &property_id, &["deliver", "ack"]);
-}
-
-#[when(expr = "property {string} is evaluated on the redelivery violation trace")]
-fn eval_violation_trace(world: &mut Forge, property_id: String) {
-    eval_on_events(world, &property_id, &["deliver", "ack", "redeliver"]);
-}
-
-#[then(expr = "the evaluation result is {string}")]
-fn eval_result_is(world: &mut Forge, expected: String) {
-    let evaluation: &PropertyEvaluation = world.evaluation.as_ref().expect("evaluated");
-    assert_eq!(evaluation.result.to_string(), expected);
-}
-
-#[then("no finding is created")]
-fn no_finding(world: &mut Forge) {
-    assert!(world.finding.is_none());
-}
-
-#[then(expr = "a finding is created with root cause {string}")]
-fn finding_root_cause(world: &mut Forge, expected: String) {
-    let finding: &FindingRecord = world.finding.as_ref().expect("finding created");
-    assert_eq!(finding.root_cause.to_string(), expected);
-}
-
-#[then(expr = "a counterexample is captured at step {int} referencing {string}")]
-fn counterexample_captured(world: &mut Forge, step_index: usize, property_id: String) {
-    let ce: &Counterexample = world.counterexample.as_ref().expect("counterexample captured");
-    assert_eq!(ce.violation.step, step_index);
-    assert_eq!(ce.property_id.as_str(), property_id);
-}
-
-#[when(expr = "a verification decision disposes that finding as {string} by {string}")]
-fn dispose_finding(world: &mut Forge, diagnosis: String, approver: String) {
-    let finding: &FindingRecord = world.finding.as_ref().expect("finding exists");
-    let root_cause: RootCause = match diagnosis.as_str() {
-        "implementation" => RootCause::Implementation,
-        "specification" => RootCause::Specification,
-        "behavioral_model" => RootCause::BehavioralModel,
-        "environment_or_assumption" => RootCause::EnvironmentOrAssumption,
-        "verification" => RootCause::Verification,
-        "expected_behavior" => RootCause::ExpectedBehavior,
-        _ => RootCause::Unresolved,
-    };
-    let decision: VerificationDecision = VerificationDecision::dispose(
-        "DEC-001".to_string(),
-        finding,
-        Vec::new(),
-        root_cause,
-        "broker failed to persist acknowledgement before redelivery".to_string(),
-        "fix_implementation".to_string(),
-        approver,
-        None,
-    )
-    .expect("decision is valid");
-    world.decision = Some(decision);
-}
-
-#[then(expr = "the decision records diagnosis {string} and approver {string}")]
-fn decision_records(world: &mut Forge, diagnosis: String, approver: String) {
-    let decision: &VerificationDecision = world.decision.as_ref().expect("decision created");
-    assert_eq!(decision.diagnosis.to_string(), diagnosis);
-    assert_eq!(decision.approver, approver);
-}
-
-#[then("the snapshot digest is unchanged")]
-fn snapshot_digest_unchanged(world: &mut Forge) {
-    let before: &ContentHash = world.snapshot_digest_before_decision.as_ref().expect("before recorded");
-    assert_eq!(&current_snapshot(world).snapshot_id, before);
 }
 
 fn run_proptest(world: &mut Forge, property_id: &str, claim_id: &str, seed: u64, budget: usize, safe: bool) {

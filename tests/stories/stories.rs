@@ -4,7 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cucumber::{given, then, when};
-use specforge::stories::{stories, Mode, Outcome, Project};
+use specforge::graph::{compile_graph, GraphSnapshot};
+use specforge::ledger::EvidenceRecord;
+use specforge::stories::{record_stories_evidence, stories, Mode, Outcome, Project, Tally};
+use specforge::trace::Source;
+use specforge::verify::{RunState, VerificationOutcome};
 
 use crate::ledger::{Ledger, RAN};
 use crate::{fixture, fixture_text, listed, root, unescaped, Forge};
@@ -162,4 +166,80 @@ fn view_is(world: &mut Forge, name: String) {
 #[then("its committed view does not exist")]
 fn view_absent(world: &mut Forge) {
     assert!(!project(world).view.exists());
+}
+
+#[then(expr = "the scratch directory holds the feature files {string}")]
+fn scratch_feature_files(world: &mut Forge, expected: String) {
+    let mut names: Vec<String> = fs::read_dir(&project(world).scratch)
+        .expect("the scratch directory is read")
+        .map(|entry: std::io::Result<fs::DirEntry>| entry.expect("an entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, listed(&expected, ", "));
+}
+
+fn ledger_snapshot() -> GraphSnapshot {
+    let path: PathBuf = root().join("tests/projects/ledger/specs/ledger.md");
+    let text: String = fs::read_to_string(&path).expect("ledger specification is read");
+    compile_graph(&[Source {
+        path: "ledger.md".to_string(),
+        text,
+    }])
+    .expect("ledger snapshot compiles")
+}
+
+fn run_state_label(state: RunState) -> &'static str {
+    match state {
+        RunState::Requested => "requested",
+        RunState::Started => "started",
+        RunState::Completed => "completed",
+        RunState::Failed => "failed",
+        RunState::Cancelled => "cancelled",
+        RunState::Inconclusive => "inconclusive",
+    }
+}
+
+fn record_story_outcome(world: &mut Forge, outcome: &Outcome) {
+    let snapshot: GraphSnapshot = ledger_snapshot();
+    let index: usize = world.evidence_ledger.records().len() + 1;
+    let record: EvidenceRecord = record_stories_evidence(
+        format!("EV-STORY-{index}"),
+        format!("RUN-STORY-{index}"),
+        "2026-11-25T00:00:00Z".to_string(),
+        &snapshot,
+        outcome,
+        Vec::new(),
+        &mut world.evidence_ledger,
+    )
+    .expect("story evidence is sealed and appended");
+    world.cucumber_record = Some(record);
+}
+
+#[when("the project outcome is recorded as evidence")]
+fn project_outcome_recorded(world: &mut Forge) {
+    let current: Outcome = outcome(world).clone();
+    record_story_outcome(world, &current);
+}
+
+#[when(expr = "a partial story run of {int} passed out of {int} ran and {int} executable is recorded as evidence")]
+fn partial_story_run_recorded(world: &mut Forge, passed: usize, ran: usize, executable: usize) {
+    let partial: Outcome = Outcome::Ran(Tally {
+        scenarios: executable,
+        executable,
+        ran,
+        passed,
+        pending: 0,
+    });
+    record_story_outcome(world, &partial);
+}
+
+#[then(expr = "the recorded story evidence has run state {string} and evaluation result {string}")]
+fn recorded_story_evidence_is(world: &mut Forge, expected_state: String, expected_result: String) {
+    let record: &EvidenceRecord = world.cucumber_record.as_ref().expect("story evidence record exists");
+    assert_eq!(run_state_label(record.run_state), expected_state);
+    match &record.outcome {
+        VerificationOutcome::Evaluation(result) => assert_eq!(result.to_string(), expected_result),
+        VerificationOutcome::Formal(formal) => panic!("expected evaluation outcome, got {formal:?}"),
+    }
+    assert!(!record.limitations.is_empty());
 }

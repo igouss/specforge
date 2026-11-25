@@ -166,7 +166,7 @@ fn line_of(text: &str, offset: usize) -> usize {
 fn strip_closing_hashes(text: &str) -> &str {
     let trimmed: &str = text.trim_end();
     let without_hashes: &str = trimmed.trim_end_matches('#');
-    if without_hashes.len() < trimmed.len() && (without_hashes.is_empty() || without_hashes.ends_with(|c: char| c.is_ascii_whitespace())) {
+    if without_hashes.is_empty() || without_hashes.ends_with(|c: char| c.is_ascii_whitespace()) {
         without_hashes.trim_end()
     } else {
         trimmed
