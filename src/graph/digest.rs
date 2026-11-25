@@ -137,6 +137,7 @@ struct PlanSemantic<'a> {
     scope: &'a str,
     assumptions: Vec<&'a str>,
     activities: &'a [PlanActivity],
+    required_evidence: &'a [String],
 }
 
 #[derive(Serialize)]
@@ -218,6 +219,7 @@ pub(crate) fn semantic_digests(
             scope: &plan.scope,
             assumptions: plan.assumptions.iter().map(ArtifactId::as_str).collect(),
             activities: &plan.activities,
+            required_evidence: &plan.required_evidence,
         };
         digests.insert(plan.id.as_str().to_string(), ContentHash::of_canonical_json(&semantic)?);
     }

@@ -3,13 +3,17 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::format::{format_assess, format_compile, format_impact, format_ledger_list, format_ledger_verify, format_verify};
+use super::format::{format_argument, format_assess, format_compile, format_impact, format_ledger_list, format_ledger_verify, format_recommend, format_verify};
 use super::parse::LedgerAction;
+use super::recommend::{append_refuted_fallbacks, hydrate_corpus};
 use super::{utc_timestamp_now, CliOutput, EXIT_CHECK_FAILED, EXIT_OK};
+use crate::argument::{self, AssuranceArgument};
 use crate::assurance::{self, ClaimAssessment, ImpactSet};
+use crate::corpus::CounterexampleRegistry;
 use crate::graph::{self, canonical_json, ArtifactId, ContentHash, GraphDefect, GraphSnapshot, VerificationClaim};
 use crate::ledger::{EvidenceKind, EvidenceRecord, LedgerError};
 use crate::ledger_fs::FsLedger;
+use crate::planner::{self, ExplorationRecommendation};
 use crate::proptest_adapter::ProptestAdapter;
 use crate::trace::Source;
 use crate::verify::{AdapterError, ClaimStatus, EvaluationResult, FormalOutcome, RunEnvelope, VerificationAdapter, VerificationOutcome, VerificationRequest};
@@ -283,4 +287,46 @@ pub(crate) fn run_impact(from_dir: &Path, to_dir: &Path, ledger_dir: &Path, json
     let clean: bool = impact.stale_evidence_ids.is_empty() && impact.affected_claim_ids.is_empty();
     let exit_code: u8 = if clean { EXIT_OK } else { EXIT_CHECK_FAILED };
     format_impact(&previous, &current, &impact, clean, exit_code, json)
+}
+
+pub(crate) fn run_argument(specs_dir: &Path, ledger_dir: &Path, claim: &str, subclaims: &[String], json: bool) -> CliOutput {
+    let snapshot: GraphSnapshot = match compile_dir(specs_dir) {
+        Ok(snapshot) => snapshot,
+        Err(error) => return compile_error_output(error, json),
+    };
+    let fs_ledger: FsLedger = match open_existing_ledger(ledger_dir) {
+        Ok(ledger) => ledger,
+        Err(message) => return CliOutput::error(message, json),
+    };
+    let built: AssuranceArgument = match argument::build_assurance_argument(&snapshot, fs_ledger.ledger(), claim, subclaims) {
+        Ok(built) => built,
+        Err(message) => return CliOutput::error(message, json),
+    };
+    let exit_code: u8 = if is_claim_supported(built.status) { EXIT_OK } else { EXIT_CHECK_FAILED };
+    format_argument(&built, exit_code, json)
+}
+
+pub(crate) fn run_recommend(specs_dir: &Path, ledger_dir: &Path, json: bool) -> CliOutput {
+    let snapshot: GraphSnapshot = match compile_dir(specs_dir) {
+        Ok(snapshot) => snapshot,
+        Err(error) => return compile_error_output(error, json),
+    };
+    let fs_ledger: FsLedger = match open_existing_ledger(ledger_dir) {
+        Ok(ledger) => ledger,
+        Err(message) => return CliOutput::error(message, json),
+    };
+    let assessments: Vec<ClaimAssessment> = snapshot
+        .claims
+        .iter()
+        .map(|claim: &VerificationClaim| assurance::assess_claim(claim, &snapshot, fs_ledger.ledger()))
+        .collect();
+    let corpus: CounterexampleRegistry = match hydrate_corpus(&snapshot, &fs_ledger) {
+        Ok(corpus) => corpus,
+        Err(message) => return CliOutput::error(message, json),
+    };
+    let mut recommendations: Vec<ExplorationRecommendation> = planner::recommend_activities(&snapshot, fs_ledger.ledger(), &[], &assessments, &corpus);
+    append_refuted_fallbacks(&snapshot, &assessments, &mut recommendations);
+    let clean: bool = recommendations.is_empty();
+    let exit_code: u8 = if clean { EXIT_OK } else { EXIT_CHECK_FAILED };
+    format_recommend(&snapshot, &recommendations, clean, exit_code, json)
 }

@@ -67,6 +67,13 @@ fn cli_json_bool_true(world: &mut Forge, field: String) {
     assert!(actual, "expected {field} to be true");
 }
 
+#[then(expr = "the CLI JSON field {string} equals boolean false")]
+fn cli_json_bool_false(world: &mut Forge, field: String) {
+    let json: Value = parsed_json(world);
+    let actual: bool = json.get(&field).and_then(Value::as_bool).expect("bool field exists");
+    assert!(!actual, "expected {field} to be false");
+}
+
 #[then(expr = "the CLI JSON array {string} has length {int}")]
 fn cli_json_array_len(world: &mut Forge, field: String, expected: usize) {
     let json: Value = parsed_json(world);

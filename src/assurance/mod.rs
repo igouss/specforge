@@ -1,3 +1,4 @@
+mod correlation;
 mod freshness;
 
 use std::collections::BTreeSet;
@@ -9,9 +10,11 @@ use crate::graph::{ArtifactId, DependencyPin, GraphSnapshot, VerificationClaim, 
 use crate::ledger::{EvidenceLedger, EvidenceRecord, EvidenceRelation};
 use crate::verify::{ClaimStatus, EvaluationResult, FormalOutcome, RunState, VerificationOutcome};
 
+pub use correlation::CorrelationNote;
 pub use freshness::{freshness_of, impact_set};
 
-use freshness::{is_claim_link_relation, missing_pins, relevant_records};
+use correlation::detect_correlations;
+use freshness::{is_claim_link_relation, is_proved_outcome, missing_pins, relevant_records};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
@@ -56,6 +59,8 @@ pub struct ClaimAssessment {
     pub unbounded_proof: bool,
     pub evaluated: Vec<EvidenceEvaluationEntry>,
     pub contradictions: Vec<Contradiction>,
+    #[serde(default)]
+    pub correlations: Vec<CorrelationNote>,
     pub rationale: Vec<String>,
 }
 
@@ -64,27 +69,6 @@ pub struct ImpactSet {
     pub changed_artifacts: Vec<String>,
     pub stale_evidence_ids: Vec<String>,
     pub affected_claim_ids: Vec<ArtifactId>,
-}
-
-fn is_proved_outcome(outcome: &VerificationOutcome) -> bool {
-    match outcome {
-        VerificationOutcome::Formal(FormalOutcome::Proved) => true,
-        VerificationOutcome::Evaluation(
-            EvaluationResult::Satisfied
-            | EvaluationResult::Violated
-            | EvaluationResult::Inconclusive
-            | EvaluationResult::NotEvaluated
-            | EvaluationResult::InvalidEvaluation,
-        )
-        | VerificationOutcome::Formal(
-            FormalOutcome::Refuted
-            | FormalOutcome::BoundedSuccess { .. }
-            | FormalOutcome::BoundedFailure { .. }
-            | FormalOutcome::Unknown
-            | FormalOutcome::Timeout
-            | FormalOutcome::Unsupported,
-        ) => false,
-    }
 }
 
 pub(crate) fn supporting_disqualifications(record: &EvidenceRecord, claim: &VerificationClaim) -> Vec<String> {
@@ -396,6 +380,8 @@ pub fn assess_claim(claim: &VerificationClaim, snapshot: &GraphSnapshot, ledger:
         ClaimStatus::Inconclusive
     };
 
+    let correlations: Vec<CorrelationNote> = detect_correlations(&current_supporting, &mut rationale);
+
     let all_properties_proved: bool = if claim.properties.is_empty() {
         current_supporting.iter().any(|record: &&EvidenceRecord| is_proved_outcome(&record.outcome))
     } else {
@@ -413,6 +399,7 @@ pub fn assess_claim(claim: &VerificationClaim, snapshot: &GraphSnapshot, ledger:
         unbounded_proof,
         evaluated,
         contradictions,
+        correlations,
         rationale,
     }
 }

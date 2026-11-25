@@ -3,9 +3,11 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use super::{CliOutput, EXIT_OK};
+use crate::argument::{export_argument_json, export_argument_markdown, AssuranceArgument};
 use crate::assurance::{ClaimAssessment, ImpactSet};
 use crate::graph::{canonical_json, ArtifactId, ContentHash, GraphSnapshot, SourceRevision, VerificationMethod};
 use crate::ledger::{EvidenceKind, EvidenceLink, EvidenceRecord, EvidenceRelation};
+use crate::planner::ExplorationRecommendation;
 use crate::verify::{Counterexample, FormalOutcome, RunEnvelope, RunState, VerificationOutcome};
 
 #[derive(Serialize)]
@@ -86,6 +88,13 @@ struct ImpactReport<'a> {
     changed_artifacts: &'a [String],
     stale_evidence_ids: &'a [String],
     affected_claim_ids: &'a [ArtifactId],
+}
+
+#[derive(Serialize)]
+struct RecommendReport<'a> {
+    snapshot_id: &'a ContentHash,
+    clean: bool,
+    recommendations: &'a [ExplorationRecommendation],
 }
 
 fn encode_json<T: Serialize>(value: &T, json: bool) -> Result<String, CliOutput> {
@@ -351,4 +360,47 @@ pub(crate) fn format_impact(previous: &GraphSnapshot, current: &GraphSnapshot, i
         previous.snapshot_id, current.snapshot_id
     );
     CliOutput::with_status(exit_code, text)
+}
+
+pub(crate) fn format_argument(argument: &AssuranceArgument, exit_code: u8, json: bool) -> CliOutput {
+    if json {
+        return match export_argument_json(argument) {
+            Ok(encoded) => CliOutput::with_status(exit_code, encoded),
+            Err(error) => CliOutput::error(error, true),
+        };
+    }
+    CliOutput::with_status(exit_code, export_argument_markdown(argument))
+}
+
+pub(crate) fn format_recommend(snapshot: &GraphSnapshot, recommendations: &[ExplorationRecommendation], clean: bool, exit_code: u8, json: bool) -> CliOutput {
+    if json {
+        let report: RecommendReport<'_> = RecommendReport {
+            snapshot_id: &snapshot.snapshot_id,
+            clean,
+            recommendations,
+        };
+        return match encode_json(&report, true) {
+            Ok(encoded) => CliOutput::with_status(exit_code, encoded),
+            Err(output) => output,
+        };
+    }
+    let mut lines: Vec<String> = vec![
+        format!("snapshot_id: {}", snapshot.snapshot_id),
+        format!("recommendations: {}", recommendations.len()),
+    ];
+    if recommendations.is_empty() {
+        lines.push("none".to_string());
+    }
+    for rec in recommendations {
+        lines.push(format!(
+            "  {} | {} | {} | target={} | items=[{}]",
+            rec.id,
+            rec.reason,
+            method_label(rec.method),
+            rec.target_id,
+            rec.items.join(", ")
+        ));
+        lines.push(format!("    rationale: {}", rec.rationale));
+    }
+    CliOutput::with_status(exit_code, lines.join("\n"))
 }

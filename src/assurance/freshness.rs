@@ -5,6 +5,27 @@ use crate::graph::{ArtifactId, ContentHash, DependencyPin, GraphSnapshot, Verifi
 use crate::ledger::{EvidenceLedger, EvidenceLink, EvidenceRecord, EvidenceRelation};
 use crate::verify::{EvaluationResult, FormalOutcome, RunState, VerificationOutcome};
 
+pub(super) fn is_proved_outcome(outcome: &VerificationOutcome) -> bool {
+    match outcome {
+        VerificationOutcome::Formal(FormalOutcome::Proved) => true,
+        VerificationOutcome::Evaluation(
+            EvaluationResult::Satisfied
+            | EvaluationResult::Violated
+            | EvaluationResult::Inconclusive
+            | EvaluationResult::NotEvaluated
+            | EvaluationResult::InvalidEvaluation,
+        )
+        | VerificationOutcome::Formal(
+            FormalOutcome::Refuted
+            | FormalOutcome::BoundedSuccess { .. }
+            | FormalOutcome::BoundedFailure { .. }
+            | FormalOutcome::Unknown
+            | FormalOutcome::Timeout
+            | FormalOutcome::Unsupported,
+        ) => false,
+    }
+}
+
 fn is_negative_outcome(outcome: &VerificationOutcome) -> bool {
     match outcome {
         VerificationOutcome::Evaluation(EvaluationResult::Violated)

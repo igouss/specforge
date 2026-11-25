@@ -12,9 +12,11 @@ pub mod ledger;
 #[cfg(feature = "ledger-fs")]
 pub mod ledger_fs;
 pub mod model;
+pub mod orchestrator;
 pub mod planner;
 #[cfg(feature = "proptest-adapter")]
 pub mod proptest_adapter;
+pub mod statistics;
 #[cfg(feature = "cucumber")]
 pub mod stories;
 pub mod trace;

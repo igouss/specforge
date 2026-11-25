@@ -96,7 +96,7 @@ def char_end(text, i):
 
 def main():
     found = []
-    for directory in ("src", "tests"):
+    for directory in ("src", "tests", "examples"):
         for path in sorted((ROOT / directory).rglob("*.rs")):
             text = path.read_text(encoding="utf-8")
             for offset in comments(text):

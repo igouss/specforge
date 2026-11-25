@@ -42,7 +42,7 @@ Deterministic simulation engines (for example, discrete-event simulators with vi
 
 ### Formal Verification (`FormalAdapter`)
 
-Model checkers, SMT solvers, and theorem provers implement `specforge::formal::FormalAdapter` in [src/formal.rs](../src/formal.rs) and normalize their `FormalCheckReport` via `normalize_formal_report`:
+Model checkers, SMT solvers, and theorem provers implement `specforge::formal::FormalAdapter` in [src/formal/mod.rs](../src/formal/mod.rs) and normalize their `FormalCheckReport` via `normalize_formal_report`:
 
 - Bind each checked property through `FormalPropertyRef` (`property_id`, `external_tool`, `module`, `symbol`, optional `digest`), declare explicit `FormalBounds` when bounded, list snapshot `assumptions`, and attach SHA-256 `FormalArtifactRef`s (proof scripts, solver logs, counterexample witnesses).
 - `normalize_formal_report` preserves all seven `FormalOutcome` variants (`Proved`, `Refuted`, `BoundedSuccess`, `BoundedFailure`, `Unknown`, `Timeout`, `Unsupported`) losslessly, rejects empty bounds on bounded outcomes, rejects `Proved` when assumptions are inconsistent with the property or claims (or when depth/state bounds are declared), retains declared bounds in `limitations`, and maps `Unknown`, `Timeout`, and `Unsupported` to `RunState::Inconclusive`.
@@ -54,4 +54,4 @@ Model checkers, SMT solvers, and theorem provers implement `specforge::formal::F
 - **Example-based Cucumber adapter**: `stories_with_evidence` / `record_stories_evidence` in [src/stories.rs](../src/stories.rs) (`feature = "cucumber"`).
 - **Pure state-machine generator and trace evaluator**: [src/model.rs](../src/model.rs) (no I/O, `wasm32`-clean).
 - **Pure DST adapter contract**: [src/dst.rs](../src/dst.rs) (no I/O, `wasm32`-clean).
-- **Pure formal verification adapter contract**: [src/formal.rs](../src/formal.rs) (no I/O, `wasm32`-clean).
+- **Pure formal verification adapter contract**: [src/formal/mod.rs](../src/formal/mod.rs) (no I/O, `wasm32`-clean).

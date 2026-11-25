@@ -19,3 +19,10 @@ jobs:
         with:
           tool: just
       - run: just check
+      - name: Check individual feature combinations
+        run: |
+          cargo check --no-default-features
+          cargo check --features cucumber
+          cargo check --features ledger-fs
+          cargo check --features proptest-adapter
+          cargo check --features cli

@@ -1,6 +1,7 @@
 mod commands;
 mod format;
 mod parse;
+mod recommend;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -158,5 +159,13 @@ where
             ledger_dir,
             json,
         } => commands::run_impact(&from_dir, &to_dir, &ledger_dir, json),
+        Command::Argument {
+            specs_dir,
+            ledger_dir,
+            claim,
+            subclaims,
+            json,
+        } => commands::run_argument(&specs_dir, &ledger_dir, &claim, &subclaims, json),
+        Command::Recommend { specs_dir, ledger_dir, json } => commands::run_recommend(&specs_dir, &ledger_dir, json),
     }
 }

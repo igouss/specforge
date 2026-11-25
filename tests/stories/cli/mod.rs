@@ -1,4 +1,5 @@
 mod assertions;
+mod extended;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,7 +29,7 @@ pub struct CliState {
     pub last_output: Option<CliOutput>,
 }
 
-fn fresh_workspace() -> PathBuf {
+pub(super) fn fresh_workspace() -> PathBuf {
     let index: usize = CLI_WORKSPACES.fetch_add(1, Ordering::SeqCst);
     let path: PathBuf = Path::new(env!("CARGO_TARGET_TMPDIR")).join("cli-stories").join(format!("ws-{index}"));
     if path.exists() {
@@ -38,14 +39,14 @@ fn fresh_workspace() -> PathBuf {
     path
 }
 
-fn safe_variant(fixture: &str) -> String {
+pub(super) fn safe_variant(fixture: &str) -> String {
     let original: String = fixture_text(fixture);
     let removed: &str = "  - name: redeliver\n    from: acknowledged\n    to: redelivered\n    event: redeliver\n";
     assert!(original.contains(removed), "fixture {fixture} missing redeliver transition");
     original.replace(removed, "")
 }
 
-fn write_spec_dir(root: &Path, subdir: &str, filename: &str, content: &str) -> PathBuf {
+pub(super) fn write_spec_dir(root: &Path, subdir: &str, filename: &str, content: &str) -> PathBuf {
     let dir: PathBuf = root.join(subdir);
     fs::create_dir_all(&dir).expect("spec dir created");
     fs::write(dir.join(filename), content).expect("spec file written");

@@ -111,7 +111,7 @@ pub struct Predicate {
     pub expression: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VerificationMethod {
     ExampleBased,
@@ -119,6 +119,25 @@ pub enum VerificationMethod {
     PropertyBased,
     DeterministicSimulation,
     Formal,
+}
+
+impl VerificationMethod {
+    /// When a verification method is formatted as a canonical label, `as_str` shall return its snake_case identifier.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            VerificationMethod::ExampleBased => "example_based",
+            VerificationMethod::ModelBased => "model_based",
+            VerificationMethod::PropertyBased => "property_based",
+            VerificationMethod::DeterministicSimulation => "deterministic_simulation",
+            VerificationMethod::Formal => "formal",
+        }
+    }
+}
+
+impl fmt::Display for VerificationMethod {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,6 +181,8 @@ pub struct VerificationPlan {
     pub scope: String,
     pub assumptions: Vec<ArtifactId>,
     pub activities: Vec<PlanActivity>,
+    #[serde(default)]
+    pub required_evidence: Vec<String>,
     pub path: String,
     pub line: usize,
 }

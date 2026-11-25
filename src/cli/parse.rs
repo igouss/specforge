@@ -43,6 +43,18 @@ pub(crate) enum Command {
         ledger_dir: PathBuf,
         json: bool,
     },
+    Argument {
+        specs_dir: PathBuf,
+        ledger_dir: PathBuf,
+        claim: String,
+        subclaims: Vec<String>,
+        json: bool,
+    },
+    Recommend {
+        specs_dir: PathBuf,
+        ledger_dir: PathBuf,
+        json: bool,
+    },
 }
 
 pub(crate) fn usage_text() -> &'static str {
@@ -51,7 +63,9 @@ pub(crate) fn usage_text() -> &'static str {
   specforge assess <specs-dir> --ledger <dir> [--claim <id>] [--json]
   specforge verify <specs-dir> --property <id> [--claim <id>] [--seed <u64>] [--budget <n>] [--ledger <dir>] [--json]
   specforge ledger <dir> {verify|export|list} [--json]
-  specforge impact --from <old-specs-dir> --to <new-specs-dir> --ledger <dir> [--json]"
+  specforge impact --from <old-specs-dir> --to <new-specs-dir> --ledger <dir> [--json]
+  specforge argument <specs-dir> --ledger <dir> --claim <id> [--subclaim <id>...] [--json]
+  specforge recommend <specs-dir> --ledger <dir> [--json]"
 }
 
 fn split_flag(arg: &str) -> (&str, Option<&str>) {
@@ -312,6 +326,93 @@ fn parse_impact(args: &[String]) -> Result<Command, String> {
     })
 }
 
+fn parse_argument(args: &[String]) -> Result<Command, String> {
+    let mut specs_dir: Option<PathBuf> = None;
+    let mut ledger_dir: Option<PathBuf> = None;
+    let mut claim: Option<String> = None;
+    let mut subclaims: Vec<String> = Vec::new();
+    let mut json: bool = false;
+    let mut index: usize = 0;
+    while let Some(arg) = args.get(index) {
+        if is_help_flag(arg) {
+            return Ok(Command::Help);
+        }
+        let (flag, inline): (&str, Option<&str>) = split_flag(arg);
+        match flag {
+            "--json" => {
+                reject_inline_value(flag, inline)?;
+                json = true;
+            }
+            "--ledger" => {
+                let value: String = take_value(flag, inline, args, &mut index)?;
+                set_once(&mut ledger_dir, PathBuf::from(value), "flag --ledger")?;
+            }
+            "--claim" => {
+                let value: String = take_value(flag, inline, args, &mut index)?;
+                set_once(&mut claim, value, "flag --claim")?;
+            }
+            "--subclaim" => {
+                let value: String = take_value(flag, inline, args, &mut index)?;
+                subclaims.push(value);
+            }
+            other if other.starts_with('-') => {
+                return Err(format!("unknown flag for argument: {arg}"));
+            }
+            _ => {
+                set_once(&mut specs_dir, PathBuf::from(arg), "specs directory")?;
+            }
+        }
+        index += 1;
+    }
+    let dir: PathBuf = specs_dir.ok_or_else(|| "argument requires <specs-dir>".to_string())?;
+    let ledger: PathBuf = ledger_dir.ok_or_else(|| "argument requires --ledger <dir>".to_string())?;
+    let claim_id: String = claim.ok_or_else(|| "argument requires --claim <id>".to_string())?;
+    Ok(Command::Argument {
+        specs_dir: dir,
+        ledger_dir: ledger,
+        claim: claim_id,
+        subclaims,
+        json,
+    })
+}
+
+fn parse_recommend(args: &[String]) -> Result<Command, String> {
+    let mut specs_dir: Option<PathBuf> = None;
+    let mut ledger_dir: Option<PathBuf> = None;
+    let mut json: bool = false;
+    let mut index: usize = 0;
+    while let Some(arg) = args.get(index) {
+        if is_help_flag(arg) {
+            return Ok(Command::Help);
+        }
+        let (flag, inline): (&str, Option<&str>) = split_flag(arg);
+        match flag {
+            "--json" => {
+                reject_inline_value(flag, inline)?;
+                json = true;
+            }
+            "--ledger" => {
+                let value: String = take_value(flag, inline, args, &mut index)?;
+                set_once(&mut ledger_dir, PathBuf::from(value), "flag --ledger")?;
+            }
+            other if other.starts_with('-') => {
+                return Err(format!("unknown flag for recommend: {arg}"));
+            }
+            _ => {
+                set_once(&mut specs_dir, PathBuf::from(arg), "specs directory")?;
+            }
+        }
+        index += 1;
+    }
+    let dir: PathBuf = specs_dir.ok_or_else(|| "recommend requires <specs-dir>".to_string())?;
+    let ledger: PathBuf = ledger_dir.ok_or_else(|| "recommend requires --ledger <dir>".to_string())?;
+    Ok(Command::Recommend {
+        specs_dir: dir,
+        ledger_dir: ledger,
+        json,
+    })
+}
+
 pub(crate) fn parse_args(args: &[String]) -> Result<Command, String> {
     let Some((first, rest)): Option<(&String, &[String])> = args.split_first() else {
         return Err("missing subcommand".to_string());
@@ -325,6 +426,8 @@ pub(crate) fn parse_args(args: &[String]) -> Result<Command, String> {
         "verify" => parse_verify(rest),
         "ledger" => parse_ledger(rest),
         "impact" => parse_impact(rest),
+        "argument" => parse_argument(rest),
+        "recommend" => parse_recommend(rest),
         other => Err(format!("unknown subcommand \"{other}\"")),
     }
 }

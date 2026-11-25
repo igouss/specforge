@@ -7,7 +7,9 @@ mod exploration;
 mod external_assurance;
 mod graph;
 mod ledger;
+mod orchestration;
 mod standing;
+mod statistics;
 mod stories;
 mod trace;
 
@@ -67,6 +69,8 @@ pub struct Forge {
     exploration: exploration::ExplorationState,
     cli: cli::CliState,
     external_assurance: external_assurance::ExternalAssuranceState,
+    orchestration: orchestration::OrchestrationState,
+    statistics: statistics::StatisticsState,
 }
 
 impl Forge {

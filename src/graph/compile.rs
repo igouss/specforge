@@ -5,8 +5,8 @@ use serde::Deserialize;
 
 use super::digest::{semantic_digests, snapshot_digest, ContentHash};
 use super::validate::{
-    parse_artifact_id, parse_req_ids, register_id, require_non_empty, validate_cross_references, OrderedDefect, PropertyCheck, RawRefs, RefCheck, SpecBlock,
-    SubjectCheck, TargetCheck,
+    collect_assumptions, parse_artifact_id, parse_req_ids, register_id, require_non_empty, require_non_empty_items, validate_cross_references, OrderedDefect,
+    PropertyCheck, RawRefs, SpecBlock, SubjectCheck, TargetCheck,
 };
 use super::{
     ArtifactId, Assumption, GraphDefect, GraphSnapshot, PlanActivity, Predicate, Property, PropertyKind, SourceRevision, StateMachine, Transition,
@@ -65,6 +65,8 @@ enum RawBlock {
         assumptions: Vec<String>,
         #[serde(default)]
         activities: Vec<RawPlanActivity>,
+        #[serde(default)]
+        required_evidence: Vec<String>,
     },
 }
 
@@ -239,19 +241,7 @@ pub fn compile_graph(sources: &[Source]) -> Result<GraphSnapshot, Vec<GraphDefec
                         property: id.clone(),
                         referenced: subject.clone(),
                     });
-                    let mut parsed_assumptions: Vec<ArtifactId> = Vec::new();
-                    for raw_assumption in raw_assumptions {
-                        raw_refs.assumption_checks.push(RefCheck {
-                            document: block.document,
-                            path: block.path.clone(),
-                            line: block.line,
-                            owner: owner.clone(),
-                            referenced: raw_assumption.clone(),
-                        });
-                        if let Some(parsed_id) = ArtifactId::parse(&raw_assumption) {
-                            parsed_assumptions.push(parsed_id);
-                        }
-                    }
+                    let parsed_assumptions: Vec<ArtifactId> = collect_assumptions(raw_assumptions, &owner, block, &mut raw_refs);
                     let registered: bool = register_id(&id, block, &known_reqs, &mut seen, &mut defects);
                     if let Some(subject_id) = ArtifactId::parse(&subject) {
                         if registered {
@@ -285,19 +275,7 @@ pub fn compile_graph(sources: &[Source]) -> Result<GraphSnapshot, Vec<GraphDefec
                 if let Some(id) = parse_artifact_id(&id, block, &mut defects) {
                     let owner: String = format!("claim {id}");
                     let reqs: Vec<RequirementId> = parse_req_ids(&raw_requirements, &owner, block, &known_reqs, &mut defects);
-                    let mut parsed_assumptions: Vec<ArtifactId> = Vec::new();
-                    for raw_assumption in raw_assumptions {
-                        raw_refs.assumption_checks.push(RefCheck {
-                            document: block.document,
-                            path: block.path.clone(),
-                            line: block.line,
-                            owner: owner.clone(),
-                            referenced: raw_assumption.clone(),
-                        });
-                        if let Some(parsed_id) = ArtifactId::parse(&raw_assumption) {
-                            parsed_assumptions.push(parsed_id);
-                        }
-                    }
+                    let parsed_assumptions: Vec<ArtifactId> = collect_assumptions(raw_assumptions, &owner, block, &mut raw_refs);
                     let mut parsed_properties: Vec<ArtifactId> = Vec::new();
                     for raw_property in raw_properties {
                         raw_refs.property_checks.push(PropertyCheck {
@@ -331,8 +309,10 @@ pub fn compile_graph(sources: &[Source]) -> Result<GraphSnapshot, Vec<GraphDefec
                 scope,
                 assumptions: raw_assumptions,
                 activities,
+                required_evidence,
             } => {
                 require_non_empty(&scope, "scope", block, &mut defects);
+                require_non_empty_items(&required_evidence, "required_evidence", block, &mut defects);
                 if let Some(id) = parse_artifact_id(&id, block, &mut defects) {
                     let owner: String = format!("plan {id}");
                     let mut parsed_targets: Vec<ArtifactId> = Vec::new();
@@ -348,19 +328,7 @@ pub fn compile_graph(sources: &[Source]) -> Result<GraphSnapshot, Vec<GraphDefec
                             parsed_targets.push(parsed_id);
                         }
                     }
-                    let mut parsed_assumptions: Vec<ArtifactId> = Vec::new();
-                    for raw_assumption in raw_assumptions {
-                        raw_refs.assumption_checks.push(RefCheck {
-                            document: block.document,
-                            path: block.path.clone(),
-                            line: block.line,
-                            owner: owner.clone(),
-                            referenced: raw_assumption.clone(),
-                        });
-                        if let Some(parsed_id) = ArtifactId::parse(&raw_assumption) {
-                            parsed_assumptions.push(parsed_id);
-                        }
-                    }
+                    let parsed_assumptions: Vec<ArtifactId> = collect_assumptions(raw_assumptions, &owner, block, &mut raw_refs);
                     let registered: bool = register_id(&id, block, &known_reqs, &mut seen, &mut defects);
                     let mut parsed_activities: Vec<PlanActivity> = Vec::new();
                     for raw_activity in activities {
@@ -381,6 +349,7 @@ pub fn compile_graph(sources: &[Source]) -> Result<GraphSnapshot, Vec<GraphDefec
                             scope,
                             assumptions: parsed_assumptions,
                             activities: parsed_activities,
+                            required_evidence,
                             path: block.path.clone(),
                             line: block.line,
                         });

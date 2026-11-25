@@ -137,6 +137,29 @@ pub(super) fn require_non_empty(value: &str, field: &str, block: &SpecBlock, def
     }
 }
 
+pub(super) fn require_non_empty_items(values: &[String], field: &str, block: &SpecBlock, defects: &mut Vec<OrderedDefect>) {
+    for value in values {
+        require_non_empty(value, field, block, defects);
+    }
+}
+
+pub(super) fn collect_assumptions(raw_assumptions: Vec<String>, owner: &str, block: &SpecBlock, raw_refs: &mut RawRefs) -> Vec<ArtifactId> {
+    let mut parsed: Vec<ArtifactId> = Vec::new();
+    for raw_assumption in raw_assumptions {
+        raw_refs.assumption_checks.push(RefCheck {
+            document: block.document,
+            path: block.path.clone(),
+            line: block.line,
+            owner: owner.to_string(),
+            referenced: raw_assumption.clone(),
+        });
+        if let Some(parsed_id) = ArtifactId::parse(&raw_assumption) {
+            parsed.push(parsed_id);
+        }
+    }
+    parsed
+}
+
 pub(super) fn validate_cross_references(
     assumptions: &[Assumption],
     state_machines: &[StateMachine],

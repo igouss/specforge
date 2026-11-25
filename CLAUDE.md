@@ -5,7 +5,7 @@ SpecForge compiles Markdown specifications (EARS statements with fenced Gherkin 
 ## Read first
 
 1. [docs/strategy.md](docs/strategy.md): the operator decision (authority for everything here), the assumed defaults, the slices.
-2. [specs/](specs/): SF-001 to SF-006. The specifications are the interface; the code follows them.
+2. [specs/](specs/): SF-001 to SF-020. The specifications are the interface; the code follows them.
 3. `br ready`: what to do next. `br list -l operator` lists the questions only the operator can answer; do not build past one.
 
 ## Commands
@@ -33,7 +33,7 @@ SpecForge compiles Markdown specifications (EARS statements with fenced Gherkin 
 
 - No code comments; doc comments carry EARS contracts only.
 - Explicit types on signatures, fields, constants and locals whose type the right-hand side does not spell.
-- A commit hook rejects any authored file over 20000 bytes: split along a seam.
+- Keep every authored file under 20,000 bytes (house convention, not enforced by a git hook): split along a seam.
 - Documents state intent, decisions and rules; progress lives in `br`.
 - Commits: `<scope>: <description>`, one move per commit, green on every gate.
 - `sources/` is an archive: never edit it.
