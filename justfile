@@ -34,6 +34,18 @@ wasm:
 mutants:
     cargo mutants --all-features --no-shuffle
 
+[doc("Not in `check`: run the mutation gate (unaccepted survivors, timeouts, and stale equivalents fail).")]
+mutants-gate *args='':
+    python3 mutants_gate.py {{args}}
+
+[doc("Not in `check`: run the mutation gate scoped to the diff against `base` (per-bead / per-PR gate).")]
+mutants-diff base='origin/main' *args='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p target/mutants-gate
+    git diff "$(git merge-base {{base}} HEAD)" > target/mutants-gate/diff.patch
+    python3 mutants_gate.py --allow-empty --in-diff target/mutants-gate/diff.patch {{args}}
+
 [doc("Run `just <args>` in a bubblewrap sandbox: no network, an empty home, the project the only writable path besides /tmp, cargo offline.")]
 isolated *args='check':
     #!/usr/bin/env bash

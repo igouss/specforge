@@ -1,0 +1,48 @@
+name: mutants
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      args:
+        description: "Optional extra arguments passed to `just mutants-gate` (e.g. `-f src/view.rs`)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutants-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mutants-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just, cargo-mutants
+      - name: Run mutation gate
+        env:
+          MUTANTS_ARGS: ${{ inputs.args }}
+        run: |
+          if [ -n "$MUTANTS_ARGS" ]; then
+            read -ra extra <<< "$MUTANTS_ARGS"
+            just mutants-gate "${extra[@]}"
+          else
+            just mutants-gate
+          fi
+      - name: Upload mutation gate output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-gate-out
+          path: target/mutants-gate/mutants.out
+          if-no-files-found: ignore

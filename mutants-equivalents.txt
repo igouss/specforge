@@ -1,0 +1,11 @@
+# Accepted equivalent mutants for SpecForge.
+#
+# Each non-empty, non-comment line must follow the format:
+#   <mutant-line> | <reason>
+#
+# Where <mutant-line> is the exact mutant line emitted by cargo-mutants
+# in missed.txt, and <reason> is a non-empty justification explaining why
+# the mutant is observationally equivalent (reviewed by the orchestrator).
+#
+# Entries missing a non-empty reason, duplicate entries, or entries that
+# appear in caught.txt or unviable.txt (stale entries) fail the gate.
