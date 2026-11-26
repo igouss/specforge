@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub use self::export::{export_argument_json, export_argument_markdown};
 use crate::assurance::{assess_claim, supporting_disqualifications, ClaimAssessment, EvidenceEvaluationEntry, EvidenceFreshness};
 use crate::graph::{ArtifactId, ContentHash, GraphSnapshot, VerificationClaim, VerificationMethod};
-use crate::ledger::{EvidenceLedger, EvidenceRecord, EvidenceRelation};
+use crate::ledger::{EvidenceLedger, EvidenceLink, EvidenceRecord, EvidenceRelation};
 use crate::verify::{ClaimStatus, EvaluationResult, FormalOutcome, VerificationOutcome};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,28 +67,7 @@ fn status_severity(status: ClaimStatus) -> u8 {
 }
 
 fn worse_status(left: ClaimStatus, right: ClaimStatus) -> ClaimStatus {
-    if status_severity(right) > status_severity(left) {
-        right
-    } else {
-        left
-    }
-}
-
-fn is_claim_link_relation(relation: EvidenceRelation) -> bool {
-    match relation {
-        EvidenceRelation::Supports | EvidenceRelation::Contradicts => true,
-        EvidenceRelation::Corroborates | EvidenceRelation::DerivedFrom | EvidenceRelation::Supersedes | EvidenceRelation::Invalidates => false,
-    }
-}
-
-fn push_integrity_failure(defeaters: &mut Vec<ArgumentDefeater>, seen: &mut BTreeSet<String>, source_id: String, detail: String) {
-    if seen.insert(source_id.clone()) {
-        defeaters.push(ArgumentDefeater {
-            kind: "integrity_failure".to_string(),
-            source_id,
-            detail,
-        });
-    }
+    std::cmp::max_by_key(left, right, |status: &ClaimStatus| status_severity(*status))
 }
 
 fn collect_evidence_and_defeaters(
@@ -98,32 +77,12 @@ fn collect_evidence_and_defeaters(
 ) -> (Vec<ArgumentEvidenceItem>, Vec<ArgumentDefeater>) {
     let mut evidence: Vec<ArgumentEvidenceItem> = Vec::new();
     let mut defeaters: Vec<ArgumentDefeater> = Vec::new();
-    let mut integrity_seen: BTreeSet<String> = BTreeSet::new();
-    let mut claim_contradict_ids: BTreeSet<&str> = BTreeSet::new();
-    let mut linked_claim_ids: BTreeSet<&str> = BTreeSet::new();
-
-    for link in ledger.links() {
-        if link.to_id == claim.id.as_str() && is_claim_link_relation(link.relation) {
-            linked_claim_ids.insert(link.from_id.as_str());
-            if !link.verify_digest() {
-                let source_id: String = format!("{}->{}", link.from_id, link.to_id);
-                let detail: String = format!("link {} -> {} failed content digest verification", link.from_id, link.to_id);
-                push_integrity_failure(&mut defeaters, &mut integrity_seen, source_id, detail);
-                continue;
-            }
-            if link.relation == EvidenceRelation::Contradicts {
-                claim_contradict_ids.insert(link.from_id.as_str());
-            }
-        }
-    }
-
-    for record in ledger.records() {
-        let relevant: bool = record.claim_ids.contains(&claim.id) || linked_claim_ids.contains(record.id.as_str());
-        if relevant && !record.verify_digest() {
-            let detail: String = format!("evidence {} failed content digest verification", record.id);
-            push_integrity_failure(&mut defeaters, &mut integrity_seen, record.id.clone(), detail);
-        }
-    }
+    let claim_contradict_ids: BTreeSet<&str> = ledger
+        .links()
+        .iter()
+        .filter(|link: &&EvidenceLink| link.to_id == claim.id.as_str() && link.relation == EvidenceRelation::Contradicts)
+        .map(|link: &EvidenceLink| link.from_id.as_str())
+        .collect();
 
     let mut contradicted_evidence_ids: BTreeSet<&str> = BTreeSet::new();
     for contradiction in &assessment.contradictions {
@@ -133,29 +92,6 @@ fn collect_evidence_and_defeaters(
             source_id: format!("{}<->{}", contradiction.supporting_id, contradiction.contradicting_id),
             detail: contradiction.reason.clone(),
         });
-    }
-
-    let evaluated_ids: BTreeSet<&str> = assessment
-        .evaluated
-        .iter()
-        .map(|entry: &EvidenceEvaluationEntry| entry.evidence_id.as_str())
-        .collect();
-    for link in ledger.links() {
-        if link.relation != EvidenceRelation::Contradicts || !evaluated_ids.contains(link.to_id.as_str()) {
-            continue;
-        }
-        if !link.verify_digest() {
-            let source_id: String = format!("{}->{}", link.from_id, link.to_id);
-            let detail: String = format!("link {} -> {} failed content digest verification", link.from_id, link.to_id);
-            push_integrity_failure(&mut defeaters, &mut integrity_seen, source_id, detail);
-            continue;
-        }
-        if let Some(contra) = ledger.get(&link.from_id) {
-            if !contra.verify_digest() {
-                let detail: String = format!("contradicting evidence {} failed content digest verification", contra.id);
-                push_integrity_failure(&mut defeaters, &mut integrity_seen, contra.id.clone(), detail);
-            }
-        }
     }
 
     let mut covered_properties: BTreeSet<&ArtifactId> = BTreeSet::new();

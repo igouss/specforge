@@ -1,13 +1,17 @@
+mod minimization;
+mod validation;
+
 use std::collections::BTreeMap;
 
 use cucumber::{given, then, when};
 use specforge::corpus::{replay_corpus, CorpusError, CorpusReplayEntry, CorpusReplaySummary, CounterexampleRegistry};
-use specforge::graph::{GraphSnapshot, StateMachine};
+use specforge::graph::{ContentHash, GraphSnapshot, Property, StateMachine};
 use specforge::ledger::{EvidenceKind, EvidenceRecord};
-use specforge::model::execute_machine;
+use specforge::model::{evaluate_property, execute_machine};
 use specforge::proptest_adapter::ProptestAdapter;
 use specforge::verify::{
-    AdapterCapabilities, AdapterError, Counterexample, ExecutionTrace, MinimizationMeta, RunEnvelope, TraceEvent, VerificationAdapter, VerificationRequest,
+    AdapterCapabilities, AdapterError, Counterexample, ExecutionTrace, FindingRecord, MinimizationMeta, PropertyEvaluation, ReplayDescriptor, RunEnvelope,
+    TraceEvent, VerificationAdapter, VerificationRequest,
 };
 
 use super::safe_runner;
@@ -128,7 +132,7 @@ fn registered_original_unchanged(world: &mut Forge) {
     assert_eq!(before, after);
 }
 
-fn ensure_original_registered(world: &mut Forge) -> Counterexample {
+pub(super) fn ensure_original_registered(world: &mut Forge) -> Counterexample {
     let envelope: &RunEnvelope = world.envelope.as_ref().expect("envelope exists");
     let original: Counterexample = envelope.original_counterexample.clone().expect("original exists");
     if world.exploration.registry.get(&original.id).is_none() {
@@ -141,6 +145,25 @@ fn ensure_original_registered(world: &mut Forge) -> Counterexample {
 fn register_forged_shortcut(world: &mut Forge) {
     let snapshot: GraphSnapshot = current_snapshot(world).clone();
     let original: Counterexample = ensure_original_registered(world);
+    let property: &Property = snapshot.property(original.property_id.as_str()).expect("property exists");
+    let digest: &ContentHash = snapshot.artifact_digest(property.id.as_str()).expect("property digest");
+    let forged_events: Vec<TraceEvent> = vec![TraceEvent {
+        step: 1,
+        event: "redeliver".to_string(),
+        from_state: "queued".to_string(),
+        to_state: "redelivered".to_string(),
+        inputs: BTreeMap::new(),
+        fault: None,
+        virtual_time: Some(1),
+    }];
+    let forged_trace: ExecutionTrace = ExecutionTrace {
+        initial_state: "queued".to_string(),
+        events: forged_events.clone(),
+    };
+    let mut forged_replay: ReplayDescriptor = original.replay.clone();
+    forged_replay.events = vec!["redeliver".to_string()];
+    let (eval, _, _): (PropertyEvaluation, Option<FindingRecord>, Option<Counterexample>) =
+        evaluate_property(property, digest, &forged_trace, &original.run_id, &snapshot.snapshot_id, forged_replay.clone());
     let mut forged: Counterexample = original.clone();
     forged.id = format!("{}-shortcut", original.id);
     forged.original_id = Some(original.id.clone());
@@ -151,16 +174,9 @@ fn register_forged_shortcut(world: &mut Forge) {
         original_len: original.events.len(),
         minimized_len: 1,
     });
-    forged.events = vec![TraceEvent {
-        step: 1,
-        event: "redeliver".to_string(),
-        from_state: "queued".to_string(),
-        to_state: "redelivered".to_string(),
-        inputs: BTreeMap::new(),
-        fault: None,
-        virtual_time: Some(1),
-    }];
-    forged.replay.events = vec!["redeliver".to_string()];
+    forged.events = forged_events;
+    forged.replay = forged_replay;
+    forged.violation = eval.violation.expect("forged trace produces violation");
     world.exploration.minimized_registration = Some(world.exploration.registry.register_minimized(&snapshot, forged));
 }
 
@@ -218,11 +234,12 @@ fn register_chained_minimized(world: &mut Forge) {
 
 #[then("minimized registration fails with an invalid minimized error")]
 fn minimized_registration_invalid(world: &mut Forge) {
-    assert!(
-        matches!(world.exploration.minimized_registration, Some(Err(CorpusError::InvalidMinimized(_)))),
-        "{:?}",
-        world.exploration.minimized_registration
-    );
+    match &world.exploration.minimized_registration {
+        Some(Err(err @ CorpusError::InvalidMinimized(_))) => {
+            assert!(!err.to_string().trim().is_empty(), "CorpusError Display must be non-empty");
+        }
+        other => panic!("expected InvalidMinimized, got {other:?}"),
+    }
 }
 
 #[when("a non-replayable counterexample is registered and the corpus is replayed")]
@@ -266,10 +283,11 @@ fn replay_through_mismatched_adapter(world: &mut Forge) {
 
 #[then("corpus replay fails and leaves the ledger unchanged")]
 fn corpus_replay_fails_atomically(world: &mut Forge) {
-    assert!(
-        matches!(world.exploration.replay_error, Some(Err(CorpusError::ReplayFailed(_)))),
-        "{:?}",
-        world.exploration.replay_error
-    );
+    match &world.exploration.replay_error {
+        Some(Err(err @ CorpusError::ReplayFailed(_))) => {
+            assert!(!err.to_string().trim().is_empty(), "CorpusError Display must be non-empty");
+        }
+        other => panic!("expected ReplayFailed, got {other:?}"),
+    }
     assert_eq!(Some(world.evidence_ledger.records().len()), world.exploration.ledger_count_before_replay);
 }

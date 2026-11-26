@@ -104,6 +104,20 @@ fn normalize_proved_with_bounds_desc(world: &mut Forge, property_id: String) {
     world.external_assurance.formal_result = Some(normalize_formal_report(snapshot, &request, &report));
 }
 
+#[when(expr = "a proved formal report with a max depth bound is normalized for {string}")]
+fn normalize_proved_with_max_depth(world: &mut Forge, property_id: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let request: VerificationRequest = formal_request("RUN-FORMAL-PROVED-DEPTH", &property_id, None);
+    let mut report: FormalCheckReport = base_formal_report(request.property_id.clone(), FormalOutcome::Proved);
+    report.bounds = Some(FormalBounds {
+        max_depth: Some(12),
+        max_states: None,
+        timeout_seconds: None,
+        description: String::new(),
+    });
+    world.external_assurance.formal_result = Some(normalize_formal_report(snapshot, &request, &report));
+}
+
 #[when(expr = "a proved formal report without proof artifacts is normalized for {string}")]
 fn normalize_proved_without_artifacts(world: &mut Forge, property_id: String) {
     let snapshot: &GraphSnapshot = current_snapshot(world);

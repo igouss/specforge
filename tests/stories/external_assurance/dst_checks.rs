@@ -12,7 +12,7 @@ use specforge::verify::{
 
 use super::dst::{base_dst_report, build_dst_trace, deterministic_guarantee, dst_request};
 use crate::graph::current_snapshot;
-use crate::{fixture_text, listed, Forge};
+use crate::{fixture_text, Forge};
 
 fn run_state_text(state: RunState) -> &'static str {
     match state {
@@ -91,6 +91,17 @@ fn normalize_decreasing_clock_dst(world: &mut Forge, property_id: String) {
     let request: VerificationRequest = dst_request("RUN-DST-BADCLOCK-1", &property_id, None);
     let mut trace: ExecutionTrace = build_dst_trace(false);
     trace.events[0].virtual_time = Some(30);
+    trace.events[1].virtual_time = Some(20);
+    let report: DstRunReport = base_dst_report(RunState::Completed, trace, deterministic_guarantee());
+    world.external_assurance.dst_result = Some(normalize_dst_report(snapshot, &request, &report));
+}
+
+#[when(expr = "a DST report with equal consecutive virtual clock timestamps is normalized for {string}")]
+fn normalize_equal_clock_dst(world: &mut Forge, property_id: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let request: VerificationRequest = dst_request("RUN-DST-EQCLOCK-1", &property_id, None);
+    let mut trace: ExecutionTrace = build_dst_trace(false);
+    trace.events[0].virtual_time = Some(20);
     trace.events[1].virtual_time = Some(20);
     let report: DstRunReport = base_dst_report(RunState::Completed, trace, deterministic_guarantee());
     world.external_assurance.dst_result = Some(normalize_dst_report(snapshot, &request, &report));
@@ -207,8 +218,8 @@ fn dst_not_replayable(world: &mut Forge) {
     assert!(!replay.replayable, "expected non-replayable descriptor: {replay:?}");
 }
 
-#[then(expr = "the DST limitations name missing guarantees {string}")]
-fn dst_limitations_name_missing(world: &mut Forge, expected: String) {
+#[then(expr = "the DST limitations name exact missing guarantees {string}")]
+fn dst_limitations_name_exact_missing(world: &mut Forge, expected: String) {
     let (envelope, _digest): &(RunEnvelope, ContentHash) = world
         .external_assurance
         .dst_result
@@ -216,10 +227,12 @@ fn dst_limitations_name_missing(world: &mut Forge, expected: String) {
         .expect("dst result recorded")
         .as_ref()
         .expect("dst normalization succeeded");
-    let joined: String = envelope.limitations.join(" | ");
-    for guarantee in listed(&expected, ", ") {
-        assert!(joined.contains(&guarantee), "expected {guarantee} in limitations: {joined}");
-    }
+    let expected_line: String = format!("simulation is not replayable: missing determinism guarantees: {expected}");
+    assert!(
+        envelope.limitations.contains(&expected_line),
+        "expected exact limitation \"{expected_line}\" in {:?}",
+        envelope.limitations
+    );
 }
 
 #[then(expr = "the DST limitations mention {string}")]

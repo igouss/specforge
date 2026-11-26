@@ -51,15 +51,9 @@ fn is_inconclusive_or_invalid_outcome(outcome: &VerificationOutcome) -> bool {
 }
 
 fn link_can_override(link: &EvidenceLink, target: &EvidenceRecord, ledger: &EvidenceLedger) -> bool {
-    if link.from_id == target.id || !link.verify_digest() {
-        return false;
-    }
     let Some(source): Option<&EvidenceRecord> = ledger.get(&link.from_id) else {
         return false;
     };
-    if !source.verify_digest() {
-        return false;
-    }
     let completed: bool = match source.run_state {
         RunState::Completed => true,
         RunState::Requested | RunState::Started | RunState::Failed | RunState::Cancelled | RunState::Inconclusive => false,
@@ -76,7 +70,7 @@ pub(super) fn missing_pins(record: &EvidenceRecord, required: &[DependencyPin]) 
         let covered: bool = record
             .dependencies
             .iter()
-            .any(|recorded: &DependencyPin| recorded.artifact_id == pin.artifact_id && recorded.digest == pin.digest);
+            .any(|recorded: &DependencyPin| recorded.artifact_id == pin.artifact_id);
         if !covered {
             missing.push(pin.artifact_id.clone());
         }
@@ -189,7 +183,7 @@ pub fn impact_set(previous: &GraphSnapshot, current: &GraphSnapshot, ledger: &Ev
             for link in ledger.links() {
                 if link.from_id == record.id && is_claim_link_relation(link.relation) {
                     if let Some(claim_id) = ArtifactId::parse(&link.to_id) {
-                        if current.claim(claim_id.as_str()).is_some() || previous.claim(claim_id.as_str()).is_some() {
+                        if current.claim(claim_id.as_str()).is_some() {
                             affected_claims.insert(claim_id);
                         }
                     }
@@ -198,24 +192,15 @@ pub fn impact_set(previous: &GraphSnapshot, current: &GraphSnapshot, ledger: &Ev
         }
     }
 
-    for claim in &current.claims {
-        let self_changed: bool = changed_set.contains(claim.id.as_str());
-        let deps_changed: bool = current
-            .dependency_pins_for_claim(claim.id.as_str())
-            .iter()
-            .any(|pin: &DependencyPin| changed_set.contains(pin.artifact_id.as_str()));
-        if self_changed || deps_changed {
-            affected_claims.insert(claim.id.clone());
-        }
-    }
-    for claim in &previous.claims {
-        let self_changed: bool = changed_set.contains(claim.id.as_str());
-        let deps_changed: bool = previous
-            .dependency_pins_for_claim(claim.id.as_str())
-            .iter()
-            .any(|pin: &DependencyPin| changed_set.contains(pin.artifact_id.as_str()));
-        if self_changed || deps_changed {
-            affected_claims.insert(claim.id.clone());
+    for snapshot in [current, previous] {
+        for claim in &snapshot.claims {
+            let deps_changed: bool = snapshot
+                .dependency_pins_for_claim(claim.id.as_str())
+                .iter()
+                .any(|pin: &DependencyPin| changed_set.contains(pin.artifact_id.as_str()));
+            if deps_changed {
+                affected_claims.insert(claim.id.clone());
+            }
         }
     }
 

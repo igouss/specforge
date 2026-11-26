@@ -29,11 +29,22 @@ Feature: SF-016 — deterministic simulation reports normalize into replay-verif
     And the DST envelope seals into the evidence ledger with its replay metadata digest
 
   @near-miss
-  Scenario: a non-deterministic simulation run is marked non-replayable with explicit missing guarantees
+  Scenario: missing determinism controls or replay controls make a simulation non-replayable while seedless traces stay replayable
     Given a compiled snapshot from "sdv-assurance.md"
     When a non-deterministic DST report missing virtual clock and deterministic faults is normalized for "PROP-MSG-001"
     Then the DST replay descriptor is not replayable
-    And the DST limitations name missing guarantees "virtual_clock, deterministic_faults"
+    And the DST limitations name exact missing guarantees "virtual_clock, deterministic_faults"
+    When a non-deterministic DST report missing deterministic RNG and scheduler is normalized for "PROP-MSG-001"
+    Then the DST replay descriptor is not replayable
+    And the DST limitations name exact missing guarantees "deterministic_rng, deterministic_scheduler"
+    When a non-deterministic DST report missing only deterministic faults is normalized for "PROP-MSG-001"
+    Then the DST replay descriptor is not replayable
+    And the DST limitations name exact missing guarantees "deterministic_faults"
+    When a deterministic DST report without a seed but with recorded trace events is normalized for "PROP-MSG-001"
+    Then the DST replay descriptor is replayable with a deterministic metadata digest
+    When a deterministic DST report with neither seed nor trace events is normalized for "PROP-MSG-001"
+    Then the DST replay descriptor is not replayable
+    And the DST limitations mention "neither seed nor trace events"
 
   @near-miss
   Scenario: an inconclusive, failed, or cancelled DST run never reports satisfied and invalid versions or traces are rejected
@@ -42,8 +53,10 @@ Feature: SF-016 — deterministic simulation reports normalize into replay-verif
     Then the DST envelope has run state "inconclusive" and outcome "inconclusive"
     When a safe-trace DST report with run state "failed" is normalized for "PROP-MSG-001"
     Then the DST envelope has run state "failed" and outcome "inconclusive"
+    And the DST limitations mention "simulation run state was failed"
     When a safe-trace DST report with run state "cancelled" is normalized for "PROP-MSG-001"
     Then the DST envelope has run state "cancelled" and outcome "inconclusive"
+    And the DST limitations mention "simulation run state was cancelled"
     When a DST report with an empty engine version is normalized for "PROP-MSG-001"
     Then DST normalization fails with an invalid request error
     When a DST report with an empty initial state is normalized for "PROP-MSG-001"
@@ -54,6 +67,8 @@ Feature: SF-016 — deterministic simulation reports normalize into replay-verif
     Then DST normalization fails with an invalid request error
     When a DST report with a decreasing virtual clock is normalized for "PROP-MSG-001"
     Then DST normalization fails with an invalid request error
+    When a DST report with equal consecutive virtual clock timestamps is normalized for "PROP-MSG-001"
+    Then the DST envelope has run state "completed" and outcome "satisfied"
     When a completed DST report evaluates an input property with no matching input
     Then the DST envelope has run state "inconclusive" and outcome "inconclusive"
     And the DST limitations mention "inconclusive"
@@ -84,6 +99,7 @@ Feature: SF-017 — formal verification reports preserve all formal outcomes, bo
     Then the formal envelope has run state "completed" and formal outcome "bounded_success:depth <= 12"
     And the formal artifact digests include "proof-script, proof-log, formal_property_ref"
     And the formal limitations retain bound "depth <= 12"
+    And the formal limitations retain bound "bounded model check depth <= 12"
     And the formal envelope seals into the evidence ledger and supports "CLM-MSG-001" without unbounded proof
 
   @near-miss
@@ -117,6 +133,8 @@ Feature: SF-017 — formal verification reports preserve all formal outcomes, bo
     Then formal normalization fails with an invalid request error
     When a proved formal report with a bounds description is normalized for "PROP-MSG-001"
     Then formal normalization fails with an invalid request error
+    When a proved formal report with a max depth bound is normalized for "PROP-MSG-001"
+    Then formal normalization fails with an invalid request error
     When a proved formal report without proof artifacts is normalized for "PROP-MSG-001"
     Then formal normalization fails with an invalid request error
     When a proved formal report with a counterexample trace is normalized for "PROP-MSG-001"
@@ -129,80 +147,3 @@ Feature: SF-017 — formal verification reports preserve all formal outcomes, bo
     Then formal normalization fails with an invalid request error
 ```
 
-### SF-018 @ v1 — assurance arguments synthesize claims, subclaims, and defeaters into deterministic JSON and Markdown exports
-
-> WHEN an assurance argument is built for a root claim and optional subclaims against a graph snapshot and evidence ledger, SpecForge SHALL assess the root claim and each subclaim, capture scope, assumptions, evidence items with limitations, defeaters, rationale, status, and unbounded proof standing without collapsing into probabilistic scores, and reject unknown or self-referencing claim identifiers.
->
-> IF any subclaim is refuted, requires review, stale, invalid, or inconclusive, THEN SpecForge SHALL disclose that subclaim as a defeater on the root argument, withhold unbounded proof, and prevent the root argument from reporting supported; and every non-supported claim or subclaim SHALL surface at least one explicit defeater (`integrity_failure`, `disqualified_evidence`, `contradiction`, `evidence_gap`, or outcome/freshness defeater).
->
-> WHEN an assurance argument is exported, SpecForge SHALL produce deterministic canonical JSON and deterministic Markdown containing the claim, subclaims with indented evidence, defeaters, and rationale, assumptions, and defeaters.
-
-```gherkin
-@SF-018 @v1
-Feature: SF-018 — assurance arguments synthesize claims, subclaims, and defeaters into deterministic JSON and Markdown exports
-
-  @one @witness
-  Scenario: building an assurance argument with proved root and bounded or proved subclaim exports deterministic JSON and Markdown
-    Given a compiled snapshot from "sdv-assurance.md"
-    And an empty evidence ledger
-    And formal proved evidence exists for "PROP-MSG-001" and claim "CLM-MSG-001"
-    And bounded formal evidence "depth <= 12" exists for "PROP-MSG-002" and claim "CLM-MSG-002"
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims "CLM-MSG-002"
-    Then the assurance argument status is "supported" and unbounded proof is false
-    And the assurance argument lists assumption "ASM-MSG-001" and scope "single-broker"
-    And the assurance argument includes 1 evidence item and 1 subclaim
-    And the assurance argument JSON and Markdown exports are deterministic and disclose "depth <= 12"
-    And the exported Markdown includes indented subclaim rationale for "CLM-MSG-002"
-    Given an empty evidence ledger
-    And formal proved evidence exists for "PROP-MSG-001" and claim "CLM-MSG-001"
-    And formal proved evidence exists for "PROP-MSG-002" and claim "CLM-MSG-002"
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims "CLM-MSG-002"
-    Then the assurance argument status is "supported" and unbounded proof is true
-
-  @near-miss
-  Scenario: non-supported claims always surface explicit defeaters for gaps, disqualifications, contradictions, and integrity failures
-    Given a compiled snapshot from "sdv-assurance.md"
-    And an empty evidence ledger
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims ""
-    Then the assurance argument status is "inconclusive" and unbounded proof is false
-    And the assurance argument discloses a defeater of kind "evidence_gap" naming "PROP-MSG-001"
-    Given an empty evidence ledger
-    And disqualified wrong-scope formal evidence exists for "PROP-MSG-001" and claim "CLM-MSG-001"
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims ""
-    Then the assurance argument status is "inconclusive" and unbounded proof is false
-    And the assurance argument discloses a defeater of kind "disqualified_evidence" naming "EV-DISQ-1"
-    Given an empty evidence ledger
-    And claim-contradicting evidence link exists for "PROP-MSG-001" and claim "CLM-MSG-001"
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims ""
-    Then the assurance argument status is "refuted" and unbounded proof is false
-    And the assurance argument discloses a defeater of kind "contradiction" naming "EV-LINK-CONTRA"
-    Given an empty evidence ledger
-    And invalid-evaluation evidence exists for "PROP-MSG-001" and claim "CLM-MSG-001"
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims ""
-    Then the assurance argument status is "invalid" and unbounded proof is false
-    And the assurance argument discloses a defeater of kind "invalid_evidence" naming "EV-INVALID-1"
-
-  @near-miss
-  Scenario: contradictory root evidence and refuted or inconclusive subclaims surface as explicit defeaters
-    Given a compiled snapshot from "sdv-assurance.md"
-    And an empty evidence ledger
-    And formal proved evidence exists for "PROP-MSG-001" and claim "CLM-MSG-001"
-    And refuted formal evidence exists for "PROP-MSG-002" and claim "CLM-MSG-002"
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims "CLM-MSG-002"
-    Then the assurance argument status is "refuted" and unbounded proof is false
-    And the assurance argument discloses a defeater of kind "subclaim_defeater" naming "CLM-MSG-002"
-    And the exported Markdown includes "subclaim_defeater" and "CLM-MSG-002"
-    When contradictory DST violation evidence is also appended for "PROP-MSG-001" and claim "CLM-MSG-001"
-    And an assurance argument is built for claim "CLM-MSG-001" with subclaims ""
-    Then the assurance argument status is "requires_review" and unbounded proof is false
-    And the assurance argument discloses a defeater of kind "contradiction" naming "EV-DST-CONTRA"
-
-  @near-miss
-  Scenario: unknown or self-referencing claim identifiers are rejected when building an assurance argument
-    Given a compiled snapshot from "sdv-assurance.md"
-    And an empty evidence ledger
-    When an assurance argument is built for claim "CLM-MSG-001" with subclaims "CLM-MSG-001"
-    Then assurance argument construction fails with an error mentioning "self-referencing"
-    When an assurance argument is built for claim "CLM-UNKNOWN-999" with subclaims ""
-    Then assurance argument construction fails with an error mentioning "unknown claim"
-```

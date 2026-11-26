@@ -1,6 +1,7 @@
 mod corpus;
 mod coverage;
 mod planner;
+mod planner_replays;
 
 use std::collections::BTreeMap;
 

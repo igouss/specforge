@@ -25,7 +25,7 @@ fn method_label(method: VerificationMethod) -> &'static str {
     }
 }
 
-fn build_active_counterexample(snapshot: &GraphSnapshot, run_id: &str) -> Counterexample {
+pub(super) fn build_active_counterexample(snapshot: &GraphSnapshot, run_id: &str) -> Counterexample {
     let machine: &StateMachine = snapshot.state_machine("SM-MSG-001").expect("machine exists");
     let property: &Property = snapshot.property("PROP-MSG-001").expect("property exists");
     let digest: &ContentHash = snapshot.artifact_digest("PROP-MSG-001").expect("digest exists");

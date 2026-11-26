@@ -112,9 +112,9 @@ Feature: SF-010 — a state machine generates traceable scenarios and evaluates 
 
 ### SF-011 @ v1 — engine adapters run verification, shrink and replay counterexamples, and emit evidence
 
-> WHEN the `proptest` PBT adapter executes a verification activity against a graph snapshot with a deterministic seed, SpecForge SHALL record engine and adapter versions, seed/replay metadata, and an immutable evidence record in the ledger.
+> WHEN the `proptest` PBT adapter validates or executes a verification activity against a graph snapshot with a deterministic seed, SpecForge SHALL reject requests with empty identifiers, unknown claims or properties, or transitionless machines, drive trace generation from the seed, and record engine and adapter versions, seed/replay metadata, and an immutable evidence record in the ledger.
 >
-> IF a `proptest` run finds a property violation, THEN SpecForge SHALL preserve the original failing counterexample and the shrunk minimized counterexample linked to the original, record a valid replay descriptor, and support deterministic replay that emits a new evidence record without mutating the original counterexample.
+> IF a `proptest` run finds a property violation, THEN SpecForge SHALL preserve the original failing counterexample and the shrunk minimized counterexample linked to the original, reject causally inconsistent or non-reproducible candidate traces during shrinking, record a valid replay descriptor, and support deterministic replay (including step-zero violations with empty events while rejecting non-replayable or positive-step eventless counterexamples) that emits a new evidence record without mutating the original counterexample.
 >
 > IF a run exhausts its budget without establishing satisfaction or violation, THEN SpecForge SHALL record an `inconclusive` result and SHALL NOT report it as `satisfied`.
 >
@@ -144,11 +144,42 @@ Feature: SF-011 — engine adapters run verification, shrink and replay countere
     Then the adapter run result is "violated"
     And a minimized counterexample is linked to its original counterexample
     And the minimized counterexample is no longer than the original
+    And shrinking completes within the attempt budget
     And the counterexample replay descriptor is replayable with seed 42
     When the minimized counterexample is replayed against the buggy redelivering broker
     Then the replay reproduces "violated"
     And the ledger holds 2 evidence records
     And the original counterexample is unchanged
+
+  @one
+  Scenario: proptest seeds deterministically control generated traces and reject invalid requests
+    Given a compiled snapshot from "sdv-message.md"
+    And an empty evidence ledger
+    When the proptest adapter verifies "PROP-MSG-001" for claim "CLM-MSG-001" with seed 42 against the buggy redelivering broker
+    And the proptest adapter re-runs "PROP-MSG-001" for claim "CLM-MSG-001" with seed 42 against the buggy redelivering broker
+    Then the two proptest runs produced identical original counterexamples
+    When the proptest adapter re-runs "PROP-MSG-001" for claim "CLM-MSG-001" with seed 99 against the buggy redelivering broker
+    Then the two proptest runs produced distinct original counterexamples
+    When the proptest adapter validates a request with empty run id
+    Then the proptest request is rejected as invalid
+    When the proptest adapter validates a request with empty activity id
+    Then the proptest request is rejected as invalid
+    When the proptest adapter validates a request referencing unknown claim "CLM-UNKNOWN-999"
+    Then the proptest request is rejected as invalid
+    When the proptest adapter validates a request referencing unknown property "PROP-UNKNOWN-999"
+    Then the proptest request is rejected as invalid
+
+  @near-miss
+  Scenario: proptest shrinking rejects causally inconsistent or flaky candidate traces
+    Given a compiled snapshot from "sdv-message.md"
+    When the proptest adapter shrinks "PROP-MSG-001" against a runner forging a wrong initial state on shorter traces
+    Then shrinking preserves a causally consistent minimized trace of length 3
+    When the proptest adapter shrinks "PROP-MSG-001" against a runner forging a wrong trace length on shorter traces
+    Then shrinking preserves a causally consistent minimized trace of length 3
+    When the proptest adapter shrinks "PROP-MSG-001" against a runner forging a wrong event name on shorter traces
+    Then shrinking preserves a causally consistent minimized trace of length 3
+    When the proptest adapter shrinks "PROP-MSG-001" against a flaky runner whose shrunk violation stops reproducing
+    Then shrinking falls back to the original counterexample
 
   @near-miss
   Scenario: an exhausted budget records an inconclusive run and never passes the claim
@@ -168,10 +199,15 @@ Feature: SF-011 — engine adapters run verification, shrink and replay countere
     And ledger integrity verification passes
 
   @near-miss
-  Scenario: replaying a non-replayable counterexample is rejected
+  Scenario: replaying non-replayable or eventless positive-step counterexamples is rejected while step-zero replays succeed
+    Given a compiled snapshot from "sdv-predicates.md"
+    When a step-zero counterexample for "PROP-PRED-004" with empty replay events is replayed
+    Then the replay reproduces "violated"
     Given a compiled snapshot from "sdv-message.md"
     And an empty evidence ledger
     And the proptest adapter verifies "PROP-MSG-001" for claim "CLM-MSG-001" with seed 42 against the buggy redelivering broker
     When the counterexample is stripped of replayability and replayed
+    Then replay is rejected as not replayable
+    When the counterexample replay events are cleared while keeping replayable true and replayed
     Then replay is rejected as not replayable
 ```

@@ -1,3 +1,4 @@
+mod assurance;
 mod fs_ledger;
 mod validation;
 

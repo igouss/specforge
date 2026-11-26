@@ -1,3 +1,5 @@
+mod hardening;
+
 use std::cell::Cell;
 use std::collections::BTreeMap;
 
@@ -40,7 +42,7 @@ fn safe_broker_runner(machine: &StateMachine, events: &[String]) -> ExecutionTra
     }
 }
 
-fn buggy_broker_runner(machine: &StateMachine, events: &[String]) -> ExecutionTrace {
+pub(super) fn buggy_broker_runner(machine: &StateMachine, events: &[String]) -> ExecutionTrace {
     execute_machine(machine, events)
 }
 

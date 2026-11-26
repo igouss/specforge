@@ -1,4 +1,5 @@
 mod argument;
+mod argument_checks;
 mod dst;
 mod dst_checks;
 mod formal;

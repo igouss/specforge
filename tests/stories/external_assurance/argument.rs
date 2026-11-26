@@ -11,7 +11,7 @@ use specforge::verify::{EvaluationResult, ExecutionTrace, FormalOutcome, RunEnve
 use crate::graph::current_snapshot;
 use crate::{listed, Forge};
 
-fn append_formal_evidence(world: &mut Forge, id: &str, property_id: &str, claim_id: &str, outcome: FormalOutcome, bounds: Option<FormalBounds>) {
+pub(super) fn append_formal_evidence(world: &mut Forge, id: &str, property_id: &str, claim_id: &str, outcome: FormalOutcome, bounds: Option<FormalBounds>) {
     let snapshot: &GraphSnapshot = current_snapshot(world);
     let prop_id: ArtifactId = ArtifactId::parse(property_id).expect("valid property id");
     let clm_id: ArtifactId = ArtifactId::parse(claim_id).expect("valid claim id");
@@ -272,7 +272,7 @@ fn build_argument_step(world: &mut Forge, claim_id: String, subclaims_raw: Strin
     world.external_assurance.argument_result = Some(build_assurance_argument(snapshot, &world.evidence_ledger, &claim_id, &subclaims));
 }
 
-fn built_argument(world: &Forge) -> &AssuranceArgument {
+pub(super) fn built_argument(world: &Forge) -> &AssuranceArgument {
     world
         .external_assurance
         .argument_result

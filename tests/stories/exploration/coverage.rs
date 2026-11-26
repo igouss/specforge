@@ -130,6 +130,15 @@ fn import_fails_digest(world: &mut Forge) {
     );
 }
 
+#[then(expr = "the import error message mentions {string}")]
+fn import_error_mentions(world: &mut Forge, needle: String) {
+    let message: String = match &world.exploration.import_result {
+        Some(Err(error)) => error.to_string(),
+        other => panic!("expected import error, got {other:?}"),
+    };
+    assert!(message.contains(&needle), "expected \"{needle}\" in import error \"{message}\"");
+}
+
 #[when(expr = "an imported scenario with an impossible transition sequence is validated for {string}")]
 fn validate_impossible_import(world: &mut Forge, machine_id: String) {
     let snapshot: &GraphSnapshot = current_snapshot(world);
@@ -286,6 +295,24 @@ fn coverage_undeclared_continuous(world: &mut Forge, machine_id: String) {
     world.exploration.coverage_result = Some(compute_coverage(snapshot, &machine_id, &[trace]));
 }
 
+#[when(expr = "coverage is computed for {string} over a trace landing in the wrong target state")]
+fn coverage_wrong_target_state(world: &mut Forge, machine_id: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let trace: ExecutionTrace = ExecutionTrace {
+        initial_state: "queued".to_string(),
+        events: vec![TraceEvent {
+            step: 1,
+            event: "deliver".to_string(),
+            from_state: "queued".to_string(),
+            to_state: "acknowledged".to_string(),
+            inputs: BTreeMap::new(),
+            fault: None,
+            virtual_time: Some(1),
+        }],
+    };
+    world.exploration.coverage_result = Some(compute_coverage(snapshot, &machine_id, &[trace]));
+}
+
 #[then("coverage computation fails with an invalid trace error")]
 fn coverage_fails_trace(world: &mut Forge) {
     assert!(
@@ -293,4 +320,13 @@ fn coverage_fails_trace(world: &mut Forge) {
         "{:?}",
         world.exploration.coverage_result
     );
+}
+
+#[then(expr = "the coverage error message mentions {string}")]
+fn coverage_error_mentions(world: &mut Forge, needle: String) {
+    let message: String = match &world.exploration.coverage_result {
+        Some(Err(error)) => error.to_string(),
+        other => panic!("expected coverage error, got {other:?}"),
+    };
+    assert!(message.contains(&needle), "expected \"{needle}\" in coverage error \"{message}\"");
 }

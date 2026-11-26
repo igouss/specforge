@@ -41,6 +41,8 @@ pub(super) struct ShrinkContext<'a> {
     pub(super) seed: u64,
 }
 
+const MAX_SHRINK_ATTEMPTS: usize = 256;
+
 pub(super) fn shrink_tree<V>(tree: &mut V, context: &ShrinkContext<'_>, original: &Counterexample) -> Counterexample
 where
     V: ValueTree<Value = Vec<String>>,
@@ -50,8 +52,11 @@ where
     let mut attempts: usize = 0;
 
     let mut shrinking: bool = tree.simplify();
-    while shrinking && attempts < 256 {
-        attempts += 1;
+    for step in 1..=MAX_SHRINK_ATTEMPTS {
+        if !shrinking {
+            break;
+        }
+        attempts = step;
         let candidate: Vec<String> = tree.current();
         let trace: ExecutionTrace = (context.runner)(context.machine, &candidate);
         let consistent: bool = trace_is_causally_consistent(context.machine, &candidate, &trace);

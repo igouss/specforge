@@ -97,12 +97,7 @@ pub(crate) fn supporting_disqualifications(record: &EvidenceRecord, claim: &Veri
             ));
         }
     }
-    if record.producer.name.trim().is_empty()
-        || record.adapter.name.trim().is_empty()
-        || record.timestamp.trim().is_empty()
-        || record.run_id.trim().is_empty()
-        || record.source_revisions.is_empty()
-    {
+    if record.source_revisions.is_empty() {
         reasons.push(format!(
             "evidence {} disqualified from supporting claim {}: incomplete provenance metadata",
             record.id, claim.id

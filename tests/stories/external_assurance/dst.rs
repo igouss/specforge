@@ -238,6 +238,60 @@ fn normalize_nondeterministic_dst(world: &mut Forge, property_id: String) {
     world.external_assurance.dst_result = Some(normalize_dst_report(snapshot, &request, &report));
 }
 
+#[when(expr = "a non-deterministic DST report missing deterministic RNG and scheduler is normalized for {string}")]
+fn normalize_nondeterministic_rng_sched_dst(world: &mut Forge, property_id: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let request: VerificationRequest = dst_request("RUN-DST-NONDET-2", &property_id, None);
+    let determinism: DeterminismGuarantee = DeterminismGuarantee {
+        deterministic_rng: false,
+        deterministic_scheduler: false,
+        virtual_clock: true,
+        deterministic_faults: true,
+        notes: vec!["unseeded rng and os threads".to_string()],
+    };
+    let report: DstRunReport = base_dst_report(RunState::Completed, build_dst_trace(false), determinism);
+    world.external_assurance.dst_result = Some(normalize_dst_report(snapshot, &request, &report));
+}
+
+#[when(expr = "a non-deterministic DST report missing only deterministic faults is normalized for {string}")]
+fn normalize_nondeterministic_faults_only_dst(world: &mut Forge, property_id: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let request: VerificationRequest = dst_request("RUN-DST-NONDET-3", &property_id, None);
+    let determinism: DeterminismGuarantee = DeterminismGuarantee {
+        deterministic_rng: true,
+        deterministic_scheduler: true,
+        virtual_clock: true,
+        deterministic_faults: false,
+        notes: vec!["external fault injector".to_string()],
+    };
+    let report: DstRunReport = base_dst_report(RunState::Completed, build_dst_trace(false), determinism);
+    world.external_assurance.dst_result = Some(normalize_dst_report(snapshot, &request, &report));
+}
+
+#[when(expr = "a deterministic DST report without a seed but with recorded trace events is normalized for {string}")]
+fn normalize_seedless_with_events_dst(world: &mut Forge, property_id: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let request: VerificationRequest = dst_request("RUN-DST-SEEDLESS-1", &property_id, None);
+    let mut report: DstRunReport = base_dst_report(RunState::Completed, build_dst_trace(false), deterministic_guarantee());
+    report.replay_metadata.seed = None;
+    let normalized: Result<(RunEnvelope, ContentHash), AdapterError> = normalize_dst_report(snapshot, &request, &report);
+    world.external_assurance.dst_replay_metadata = Some(report.replay_metadata);
+    world.external_assurance.dst_result = Some(normalized);
+}
+
+#[when(expr = "a deterministic DST report with neither seed nor trace events is normalized for {string}")]
+fn normalize_no_replay_controls_dst(world: &mut Forge, property_id: String) {
+    let snapshot: &GraphSnapshot = current_snapshot(world);
+    let request: VerificationRequest = dst_request("RUN-DST-NOCONTROL-1", &property_id, None);
+    let empty_trace: ExecutionTrace = ExecutionTrace {
+        initial_state: "queued".to_string(),
+        events: Vec::new(),
+    };
+    let mut report: DstRunReport = base_dst_report(RunState::Completed, empty_trace, deterministic_guarantee());
+    report.replay_metadata.seed = None;
+    world.external_assurance.dst_result = Some(normalize_dst_report(snapshot, &request, &report));
+}
+
 #[when(expr = "a safe-trace DST report with run state {string} is normalized for {string}")]
 fn normalize_incomplete_dst(world: &mut Forge, state_name: String, property_id: String) {
     let snapshot: &GraphSnapshot = current_snapshot(world);
