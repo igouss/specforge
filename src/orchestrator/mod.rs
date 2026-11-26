@@ -168,19 +168,18 @@ fn evidence_kind_for(method: VerificationMethod) -> EvidenceKind {
     }
 }
 
-fn next_evidence_id(ledger: &EvidenceLedger, staged: &BTreeSet<String>, plan: &ArtifactId, act: &ArtifactId, prop: &ArtifactId) -> String {
+fn next_evidence_id(taken: &BTreeSet<String>, plan: &ArtifactId, act: &ArtifactId, prop: &ArtifactId) -> String {
     let base: String = format!("EV-{plan}-{act}-{prop}");
-    if ledger.get(&base).is_none() && !staged.contains(&base) {
+    if !taken.contains(&base) {
         return base;
     }
-    let mut suffix: usize = 2;
-    loop {
+    for suffix in 2..=taken.len().saturating_add(1) {
         let candidate: String = format!("{base}-{suffix}");
-        if ledger.get(&candidate).is_none() && !staged.contains(&candidate) {
+        if !taken.contains(&candidate) {
             return candidate;
         }
-        suffix += 1;
     }
+    format!("{base}-{}", taken.len().saturating_add(2))
 }
 
 fn run_matches_requirement(run: &VerificationRun, required: &str) -> bool {
@@ -260,7 +259,7 @@ impl VerificationOrchestrator {
         let plan: &VerificationPlan = snapshot.plan(plan_id).ok_or_else(|| OrchestratorError::UnknownPlan(plan_id.to_string()))?;
         let mut runs: Vec<VerificationRun> = Self::prepare_plan(snapshot, plan_id)?;
         let mut staged: Vec<EvidenceRecord> = Vec::new();
-        let mut staged_ids: BTreeSet<String> = BTreeSet::new();
+        let mut taken_ids: BTreeSet<String> = ledger.records().iter().map(|record: &EvidenceRecord| record.id.clone()).collect();
         let mut evidence_ids: Vec<String> = Vec::new();
 
         for run in &mut runs {
@@ -293,7 +292,7 @@ impl VerificationOrchestrator {
                 }
             };
             validate_run_envelope(&envelope, run, snapshot)?;
-            let ev_id: String = next_evidence_id(ledger, &staged_ids, &plan.id, &run.activity_id, &run.property_id);
+            let ev_id: String = next_evidence_id(&taken_ids, &plan.id, &run.activity_id, &run.property_id);
             let record: EvidenceRecord = EvidenceRecord::from_envelope(
                 ev_id.clone(),
                 evidence_kind_for(envelope.method),
@@ -304,7 +303,7 @@ impl VerificationOrchestrator {
             )
             .map_err(OrchestratorError::Ledger)?;
             ledger.validate_new_record(&record).map_err(OrchestratorError::Ledger)?;
-            staged_ids.insert(ev_id.clone());
+            taken_ids.insert(ev_id.clone());
             staged.push(record);
             evidence_ids.push(ev_id.clone());
 

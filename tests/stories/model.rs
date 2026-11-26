@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use cucumber::{then, when};
 use specforge::graph::{ContentHash, GraphSnapshot, Property, StateMachine, Transition};
 use specforge::model::{evaluate_property, execute_machine, generate_scenarios, GeneratedScenario};
-use specforge::verify::{Counterexample, ExecutionTrace, FindingRecord, PropertyEvaluation, ReplayDescriptor, RootCause, TraceEvent, VerificationDecision};
+use specforge::verify::{
+    AdapterError, Counterexample, ExecutionTrace, FindingRecord, PropertyEvaluation, ReplayDescriptor, RootCause, TraceEvent, VerificationDecision,
+};
 
 use crate::graph::current_snapshot;
 use crate::{listed, Forge};
@@ -229,4 +231,75 @@ fn decision_records(world: &mut Forge, diagnosis: String, approver: String) {
 fn snapshot_digest_unchanged(world: &mut Forge) {
     let before: &ContentHash = world.snapshot_digest_before_decision.as_ref().expect("before recorded");
     assert_eq!(&current_snapshot(world).snapshot_id, before);
+}
+
+fn parse_root_cause(label: &str) -> RootCause {
+    match label {
+        "implementation" => RootCause::Implementation,
+        "specification" => RootCause::Specification,
+        "behavioral_model" => RootCause::BehavioralModel,
+        "environment_or_assumption" => RootCause::EnvironmentOrAssumption,
+        "verification" => RootCause::Verification,
+        "expected_behavior" => RootCause::ExpectedBehavior,
+        _ => RootCause::Unresolved,
+    }
+}
+
+#[then(expr = "disposing that finding as {string} with authorized change {string} is rejected")]
+fn dispose_with_change_rejected(world: &mut Forge, diagnosis: String, change: String) {
+    let finding: &FindingRecord = world.finding.as_ref().expect("finding exists");
+    let result: Result<VerificationDecision, String> = VerificationDecision::dispose(
+        "DEC-REJ-1".to_string(),
+        finding,
+        Vec::new(),
+        parse_root_cause(&diagnosis),
+        "needs diagnosis before change".to_string(),
+        "defer".to_string(),
+        "alice".to_string(),
+        Some(change),
+    );
+    let err: String = result.expect_err("unresolved authorized change rejected");
+    assert!(err.contains("unresolved"), "unexpected error: {err}");
+}
+
+#[then(expr = "disposing that finding as {string} with authorized change {string} succeeds")]
+fn dispose_with_change_succeeds(world: &mut Forge, diagnosis: String, change: String) {
+    let finding: &FindingRecord = world.finding.as_ref().expect("finding exists");
+    let decision: VerificationDecision = VerificationDecision::dispose(
+        "DEC-OK-1".to_string(),
+        finding,
+        Vec::new(),
+        parse_root_cause(&diagnosis),
+        "root cause confirmed".to_string(),
+        "fix_implementation".to_string(),
+        "alice".to_string(),
+        Some(change.clone()),
+    )
+    .expect("resolved diagnosis allows authorized change");
+    assert_eq!(decision.authorized_change.as_deref(), Some(change.as_str()));
+}
+
+#[then(expr = "disposing that finding as {string} without an authorized change succeeds")]
+fn dispose_without_change_succeeds(world: &mut Forge, diagnosis: String) {
+    let finding: &FindingRecord = world.finding.as_ref().expect("finding exists");
+    let decision: VerificationDecision = VerificationDecision::dispose(
+        "DEC-OK-2".to_string(),
+        finding,
+        Vec::new(),
+        parse_root_cause(&diagnosis),
+        "triage opened".to_string(),
+        "investigate".to_string(),
+        "alice".to_string(),
+        None,
+    )
+    .expect("unresolved diagnosis without change succeeds");
+    assert!(decision.authorized_change.is_none());
+}
+
+#[then("adapter error variants format human-readable diagnostics")]
+fn adapter_error_display_checked(_world: &mut Forge) {
+    assert!(AdapterError::Unsupported("shrinking".to_string()).to_string().contains("unsupported"));
+    assert!(AdapterError::InvalidRequest("empty id".to_string()).to_string().contains("invalid"));
+    assert!(AdapterError::NotReplayable("no seed".to_string()).to_string().contains("not replayable"));
+    assert!(AdapterError::Execution("crashed".to_string()).to_string().contains("execution failed"));
 }

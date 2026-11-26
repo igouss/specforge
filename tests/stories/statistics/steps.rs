@@ -122,6 +122,17 @@ fn compute_beta_binomial(
     run_estimate(world, &model, &sample);
 }
 
+#[when(expr = "a statistical Beta-Binomial estimate with extreme finite priors is computed for claim {string} from {string} with {int} successes out of {int}")]
+fn compute_beta_binomial_extreme_priors(world: &mut Forge, claim_id: String, evidence_raw: String, successes: usize, total: usize) {
+    let model: SamplingModel = default_model(StatisticalMethod::BetaBinomial {
+        prior_alpha: 1.0e200,
+        prior_beta: 1.0e200,
+        confidence: ConfidenceLevel::NinetyFive,
+    });
+    let sample: StatisticalSample = sample_for(&claim_id, &evidence_raw, successes, total);
+    run_estimate(world, &model, &sample);
+}
+
 #[when(expr = "a statistical estimate is attempted for claim {string} from {string} with missing {string}")]
 fn attempt_missing_field(world: &mut Forge, claim_id: String, evidence_raw: String, field: String) {
     let mut model: SamplingModel = wilson_95_model();
@@ -162,6 +173,7 @@ fn attempt_invalid_prior(world: &mut Forge, kind: String, claim_id: String, evid
         "negative_beta" => (1.0, -2.0),
         "nan_alpha" => (f64::NAN, 1.0),
         "infinite_beta" => (1.0, f64::INFINITY),
+        "overflow_priors" => (f64::MAX, f64::MAX),
         other => panic!("unexpected invalid prior case {other}"),
     };
     let model: SamplingModel = default_model(StatisticalMethod::BetaBinomial {
@@ -239,6 +251,21 @@ fn estimate_bounds_in_range(world: &mut Forge, tolerance: f64, expected_point: f
     assert!((estimate.point_estimate - expected_point).abs() <= tolerance);
     assert!(estimate.lower_bound > min_bound && estimate.lower_bound < estimate.point_estimate);
     assert!(estimate.point_estimate < estimate.upper_bound && estimate.upper_bound < max_bound);
+}
+
+#[then(expr = "the statistical estimate bounds are within {float} of {float} and {float}")]
+fn estimate_bounds_match(world: &mut Forge, tolerance: f64, expected_lower: f64, expected_upper: f64) {
+    let estimate: &QualifiedEstimate = require_estimate(world);
+    assert!(
+        (estimate.lower_bound - expected_lower).abs() <= tolerance,
+        "lower_bound {} outside {tolerance} of {expected_lower}",
+        estimate.lower_bound
+    );
+    assert!(
+        (estimate.upper_bound - expected_upper).abs() <= tolerance,
+        "upper_bound {} outside {tolerance} of {expected_upper}",
+        estimate.upper_bound
+    );
 }
 
 #[then("the statistical estimate preserves sampling metadata, disclaimer, and separation from formal proof")]

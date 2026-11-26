@@ -159,3 +159,26 @@ activities:
     method: property_based
     budget: 4
 ```
+
+```specforge
+kind: plan
+id: PLAN-REQ-FORMS-001
+targets:
+  - PROP-MSG-001
+  - CLM-MSG-001
+scope: single-broker
+assumptions:
+  - ASM-MSG-001
+activities:
+  - id: ACT-PBT-004
+    method: property_based
+    budget: 8
+  - id: ACT-DST-004
+    method: deterministic_simulation
+    budget: 4
+required_evidence:
+  - property_based
+  - ACT-PBT-004
+  - PROP-MSG-001
+  - deterministic_simulation:PROP-MSG-001
+```

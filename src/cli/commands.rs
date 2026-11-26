@@ -130,8 +130,9 @@ pub(crate) fn run_assess(specs_dir: &Path, ledger_dir: &Path, claim_filter: Opti
 }
 
 fn next_evidence_ids(ledger: &FsLedger) -> (String, String) {
-    let start: usize = ledger.ledger().records().len() + 1;
-    let index: usize = (start..=usize::MAX)
+    let count: usize = ledger.ledger().records().len();
+    let start: usize = count + 1;
+    let index: usize = (start..=start.saturating_add(count))
         .find(|candidate: &usize| ledger.ledger().get(&format!("EV-CLI-{candidate}")).is_none())
         .unwrap_or(start);
     (format!("EV-CLI-{index}"), format!("RUN-CLI-{index}"))

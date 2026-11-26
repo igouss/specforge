@@ -132,11 +132,11 @@ pub struct QualifiedEstimate {
     pub separate_from_formal_proof: bool,
 }
 
-fn compute_bounds(method: StatisticalMethod, sample: &StatisticalSample) -> Result<(f64, f64, f64, u8), StatisticalError> {
+fn compute_bounds(method: StatisticalMethod, sample: &StatisticalSample) -> (f64, f64, f64, u8) {
     let n: f64 = sample.sample_size as f64;
     let k: f64 = sample.observed_successes as f64;
     let failures: f64 = sample.observed_failures as f64;
-    let (point_estimate, lower_bound, upper_bound, confidence_level_pct): (f64, f64, f64, u8) = match method {
+    match method {
         StatisticalMethod::WilsonScore { confidence } => {
             let z: f64 = confidence.z_score();
             let z2: f64 = z * z;
@@ -167,13 +167,7 @@ fn compute_bounds(method: StatisticalMethod, sample: &StatisticalSample) -> Resu
             let upper: f64 = (mean + z * std_dev).clamp(0.0, 1.0).max(mean);
             (mean, lower, upper, confidence.percentage())
         }
-    };
-    if !point_estimate.is_finite() || !lower_bound.is_finite() || !upper_bound.is_finite() || lower_bound > point_estimate || point_estimate > upper_bound {
-        return Err(StatisticalError::InvalidModel(
-            "computed statistical estimate produced non-finite or unordered bounds".to_string(),
-        ));
     }
-    Ok((point_estimate, lower_bound, upper_bound, confidence_level_pct))
 }
 
 /// When a declared sampling model and homogeneous current evidence sample are evaluated for a claim, `compute_qualified_estimate` shall validate assumptions, scope, evidence integrity, provenance, failure consistency, and non-formal homogeneity, and compute deterministic uncertainty bounds kept strictly separate from formal proof status.
@@ -189,7 +183,7 @@ pub fn compute_qualified_estimate(
     validate_model(model, claim)?;
     validate_sample(sample)?;
     validate_evidence(snapshot, ledger, claim, sample)?;
-    let (point_estimate, lower_bound, upper_bound, confidence_level_pct): (f64, f64, f64, u8) = compute_bounds(model.method, sample)?;
+    let (point_estimate, lower_bound, upper_bound, confidence_level_pct): (f64, f64, f64, u8) = compute_bounds(model.method, sample);
     let mut limitations: Vec<String> = model.limitations.clone();
     match model.method {
         StatisticalMethod::WilsonScore { confidence: _ } => {}

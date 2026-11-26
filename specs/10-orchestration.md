@@ -25,6 +25,7 @@ Feature: SF-019 — verification plans orchestrate adapters across explicit run 
     Then the plan execution report has 2 completed runs with distinct methods "property_based, deterministic_simulation"
     And the plan execution report recorded 2 immutable evidence records in the ledger
     And the plan execution report has no missing required evidence
+    And the adapter registry debug summary lists the registered methods
     And assessing claim "CLM-MSG-001" is "supported" with 0 correlation notes
 
   @near-miss
@@ -34,6 +35,8 @@ Feature: SF-019 — verification plans orchestrate adapters across explicit run 
     Then 2 runs are prepared in state "requested" bound to the snapshot
     And a prepared run transitions cleanly through requested, started, progress, and completed
     And a started run rejects backwards progress advancement
+    And a started run allows idempotent progress updates, clamps progress to a positive budget, and allows unbounded progress when budget is zero
+    And starting a run with a blank timestamp is rejected
     And a completed run rejects further start, progress, fail, cancel, and inconclusive transitions
     And a prepared run can cancel directly from requested and rejects transitions after cancelled
     And a prepared run can transition from started to inconclusive and rejects transitions after inconclusive
@@ -69,6 +72,8 @@ Feature: SF-019 — verification plans orchestrate adapters across explicit run 
     Then orchestration fails with an error mentioning "mismatch" and leaves the ledger empty
     When verification plan "PLAN-ORCH-001" is executed against an adapter returning a completed inconclusive envelope
     Then orchestration fails with an error mentioning "mismatch" and leaves the ledger empty
+    When verification plan "PLAN-ORCH-001" is executed with seed 1 at "   "
+    Then orchestration fails with an error mentioning "timestamp" and leaves the ledger empty
 
   @near-miss
   Scenario: violated runs and multi-target partial failures never satisfy required_evidence
@@ -100,4 +105,16 @@ Feature: SF-019 — verification plans orchestrate adapters across explicit run 
     When two supporting records share identical replay events "deliver, ack" for "PROP-MSG-001" and claim "CLM-MSG-001"
     And claim "CLM-MSG-001" is assessed after orchestration
     Then the orchestrated claim assessment discloses a correlation note mentioning "identical replay events"
+
+  @one
+  Scenario: repeated plan runs allocate sequential evidence ids and match activity, property, and qualified required_evidence entries
+    Given a compiled snapshot from "sdv-orchestration.md"
+    And an empty evidence ledger
+    And an adapter registry with safe property-based and deterministic-simulation adapters
+    When verification plan "PLAN-REQ-FORMS-001" is executed with seed 10 at "2026-06-01T12:20:00Z"
+    And verification plan "PLAN-REQ-FORMS-001" is executed again with seed 11 at "2026-06-01T12:21:00Z"
+    And verification plan "PLAN-REQ-FORMS-001" is executed again with seed 12 at "2026-06-01T12:22:00Z"
+    Then the plan execution report has no missing required evidence
+    And the plan execution report evidence ids are "EV-PLAN-REQ-FORMS-001-ACT-PBT-004-PROP-MSG-001-3, EV-PLAN-REQ-FORMS-001-ACT-DST-004-PROP-MSG-001-3"
+    And the ledger holds 6 evidence records with sequential suffixes for "PLAN-REQ-FORMS-001"
 ```

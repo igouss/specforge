@@ -25,16 +25,19 @@ Feature: SF-020 — qualified statistical estimates require explicit sampling as
     Then the statistical estimate succeeds for claim "CLM-MSG-001" in scope "single-broker"
     And the statistical estimate records Wilson score at 95 percent confidence with sample size 100, 95 successes, and 5 failures
     And the statistical estimate point estimate is within 0.001 of 0.950 with finite ordered bounds strictly inside 0.880 to 0.990
+    And the statistical estimate bounds are within 0.0002 of 0.88825 and 0.97846
     And the statistical estimate preserves sampling metadata, disclaimer, and separation from formal proof
     And the statistical estimate round-trips through JSON losslessly
     When a statistical Wilson score estimate at 99 percent confidence is computed for claim "CLM-MSG-001" from "EV-STAT-1" with 100 successes out of 100
     Then the statistical estimate succeeds for claim "CLM-MSG-001" in scope "single-broker"
     And the statistical estimate records Wilson score at 99 percent confidence with sample size 100, 100 successes, and 0 failures
     And the statistical estimate has lower bound below 1.0 and upper bound equal to 1.0
+    And the statistical estimate bounds are within 0.001 of 0.9378 and 1.0
     When a statistical Wilson score estimate at 90 percent confidence is computed for claim "CLM-MSG-001" from "EV-STAT-1" with 0 successes out of 10
     Then the statistical estimate succeeds for claim "CLM-MSG-001" in scope "single-broker"
     And the statistical estimate records Wilson score at 90 percent confidence with sample size 10, 0 successes, and 10 failures
     And the statistical estimate has lower bound equal to 0.0 and upper bound above 0.0
+    And the statistical estimate bounds are within 0.001 of 0.0 and 0.2129
 
   @one @witness
   Scenario: a Beta-Binomial qualified estimate incorporates explicit priors and emits credible bounds
@@ -45,9 +48,15 @@ Feature: SF-020 — qualified statistical estimates require explicit sampling as
     Then the statistical estimate succeeds for claim "CLM-MSG-001" in scope "single-broker"
     And the statistical estimate records Beta-Binomial prior 2.0 and 2.0 at 95 percent confidence
     And the statistical estimate point estimate is within 0.001 of 0.9327 with finite ordered bounds strictly inside 0.880 to 0.990
+    And the statistical estimate bounds are within 0.0001 of 0.88477 and 0.98062
     And the statistical estimate preserves sampling metadata, disclaimer, and separation from formal proof
     And the statistical estimate limitations include "normal approximation to Beta posterior credible interval"
     And the statistical estimate round-trips through JSON losslessly
+    When a statistical Beta-Binomial estimate with prior alpha 2.0 and beta 2.0 at 95 percent confidence is computed for claim "CLM-MSG-001" from "EV-DST-1" with 8 successes out of 10
+    Then the statistical estimate bounds are within 0.001 of 0.4857 and 0.9429
+    When a statistical Beta-Binomial estimate with extreme finite priors is computed for claim "CLM-MSG-001" from "EV-DST-1" with 95 successes out of 100
+    Then the statistical estimate succeeds for claim "CLM-MSG-001" in scope "single-broker"
+    And the statistical estimate bounds are within 0.001 of 0.5 and 0.5
 
   @near-miss
   Scenario: missing assumptions, invalid priors, invalid samples, scope mismatch, and unknown claims publish no numerical estimate
@@ -81,6 +90,8 @@ Feature: SF-020 — qualified statistical estimates require explicit sampling as
     When a statistical Beta-Binomial estimate with invalid prior "nan_alpha" is attempted for claim "CLM-MSG-001" from "EV-STAT-1"
     Then the statistical estimate fails with error kind "invalid_model"
     When a statistical Beta-Binomial estimate with invalid prior "infinite_beta" is attempted for claim "CLM-MSG-001" from "EV-STAT-1"
+    Then the statistical estimate fails with error kind "invalid_model"
+    When a statistical Beta-Binomial estimate with invalid prior "overflow_priors" is attempted for claim "CLM-MSG-001" from "EV-STAT-1"
     Then the statistical estimate fails with error kind "invalid_model"
     When a statistical estimate is attempted for claim "CLM-MSG-001" with invalid sample "zero_size"
     Then the statistical estimate fails with error kind "invalid_sample"

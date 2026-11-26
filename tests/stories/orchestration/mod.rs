@@ -1,3 +1,4 @@
+mod hardening;
 mod stubs;
 
 use cucumber::{given, then, when};
@@ -22,7 +23,7 @@ pub struct OrchestrationState {
     pub assessment: Option<ClaimAssessment>,
 }
 
-fn current_report(world: &Forge) -> &PlanExecutionReport {
+pub(super) fn current_report(world: &Forge) -> &PlanExecutionReport {
     world.orchestration.report.as_ref().expect("plan report present")
 }
 

@@ -108,6 +108,15 @@ Feature: SF-010 — a state machine generates traceable scenarios and evaluates 
     When property "PROP-PRED-001" is evaluated on a discontinuous trace
     Then the evaluation result is "invalid_evaluation"
     And no finding is created
+
+  @near-miss
+  Scenario: verification decisions reject authorized changes for unresolved diagnoses while allowing them for resolved diagnoses
+    Given a compiled snapshot from "sdv-message.md"
+    When property "PROP-MSG-001" is evaluated on the redelivery violation trace
+    Then disposing that finding as "unresolved" with authorized change "patch broker" is rejected
+    And disposing that finding as "implementation" with authorized change "patch broker" succeeds
+    And disposing that finding as "unresolved" without an authorized change succeeds
+    And adapter error variants format human-readable diagnostics
 ```
 
 ### SF-011 @ v1 — engine adapters run verification, shrink and replay counterexamples, and emit evidence
